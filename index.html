@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BQ Teleprompter</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --sidebar-bg: #f7f9fc;
+    --sidebar-border: #e1e4e8;
+    --text: #1f2328;
+    --text-muted: #656d76;
+    --accent: #0969da;
+    --accent-bg: #ddf4ff;
+    --code-bg: #f6f8fa;
+    --hint: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --sidebar-bg: #161b22;
+      --sidebar-border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-bg: #1f3552;
+      --code-bg: #161b22;
+      --hint: #e8c47a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+               line-height: 1.6; }
+  .layout { display: flex; min-height: 100vh; }
+  aside {
+    width: 280px; flex-shrink: 0;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 0;
+    display: flex; flex-direction: column;
+  }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--sidebar-border);
+    background: var(--sidebar-bg);
+    position: sticky; top: 0; z-index: 2;
+  }
+  .tab {
+    flex: 1;
+    background: none;
+    border: 0;
+    padding: 14px 8px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tab:hover { background: var(--accent-bg); color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .nav-list { padding: 12px 0; }
+  .nav-list.hidden { display: none; }
+  .nav-item {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 8px 16px;
+    text-decoration: none; color: var(--text);
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .nav-item:hover { background: var(--accent-bg); }
+  .nav-item.active {
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-num {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .nav-title { line-height: 1.35; }
+  .nav-sub {
+    display: none;
+    padding: 2px 0 8px 0;
+    background: var(--bg);
+  }
+  .nav-sub.expanded { display: block; }
+  .nav-sub-item {
+    display: block;
+    padding: 5px 14px 5px 40px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+    border-left: 3px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .nav-sub-item:hover { background: var(--accent-bg); color: var(--text); }
+  .nav-sub-item.active {
+    color: var(--accent);
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-sub-item code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.92em;
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+  }
+  main { flex: 1; padding: 32px 48px; max-width: 1100px; }
+  .pane.hidden { display: none; }
+  .story, .sd-item {
+    padding-bottom: 64px; border-bottom: 1px solid var(--sidebar-border);
+    margin-bottom: 32px;
+  }
+  .story:last-child, .sd-item:last-child { border-bottom: none; }
+  .story h1, .sd-item h1 { margin-top: 8px; font-size: 28px; line-height: 1.3; }
+  .theme-cn {
+    background: var(--code-bg);
+    padding: 12px 16px; border-left: 3px solid var(--accent);
+    margin: 12px 0 20px; font-size: 14px; border-radius: 4px;
+  }
+  .meta-role {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .story h2, .story h3, .story h4 { margin-top: 24px; }
+  .story p { margin: 12px 0; }
+  .story ul, .story ol { padding-left: 24px; }
+  .story li { margin: 6px 0; }
+  .story strong { color: var(--text); }
+  .story code {
+    background: var(--code-bg);
+    padding: 2px 6px; border-radius: 3px;
+    font-size: 0.9em;
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+  }
+  .story hr { border: none; border-top: 1px solid var(--sidebar-border); margin: 24px 0; }
+
+  /* hover-hint teleprompter mode */
+  .hint { border-bottom: 1.5px dashed var(--hint); cursor: help; color: var(--hint); font-weight: 600; }
+  .hint.pinned { background: var(--accent-bg); border-radius: 3px; }
+  #tip {
+    position: absolute; z-index: 99; max-width: 540px; min-width: 300px;
+    background: var(--sidebar-bg); border: 1px solid var(--hint); border-radius: 10px;
+    padding: 12px 16px; font-size: 0.9em; line-height: 1.75;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35); display: none;
+  }
+  #tip .t { color: var(--hint); font-weight: 600; margin-bottom: 6px; }
+  #tip.pinned { border-width: 2px; }
+
+  .sd-image-link { display: block; }
+  .sd-image {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 4px;
+    margin-top: 12px;
+    background: #fff;
+  }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; height: auto; max-height: 50vh; position: relative; }
+    main { padding: 20px; }
+  }
+
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="tabs">
+      <button class="tab active" data-tab="general">General</button>
+      <button class="tab" data-tab="stars">STAR Stories</button>
+      <button class="tab" data-tab="sysdesign">System Design</button>
+    </div>
+    <nav class="nav-list" data-list="general">
+  <a href="#note-07-doordash-backend-swe" class="nav-item" data-id="note-07-doordash-backend-swe" data-list="general">
+    <span class="nav-num">01</span>
+    <span class="nav-title">DoorDash — Code Craft Technical Interview</span>
+  </a>
+  <div class="nav-sub always-on expanded" data-parent="note-07-doordash-backend-swe">
+    <a href="#note-07-doordash-backend-swe-h-self-intro-50" class="nav-sub-item" data-id="note-07-doordash-backend-swe-h-self-intro-50" data-list="general">开场 · Self-Intro（工程师版, ~50 秒）</a><a href="#note-07-doordash-backend-swe-h-10-2-3" class="nav-sub-item" data-id="note-07-doordash-backend-swe-h-10-2-3" data-list="general">收尾 · 反问（10 分钟, 对工程师, 问 2-3 个）</a><a href="#note-07-doordash-backend-swe-h-section" class="nav-sub-item" data-id="note-07-doordash-backend-swe-h-section" data-list="general">简历追问 · 弹药</a>
+  </div>
+  <a href="#note-08a-dasher-pay-study" class="nav-item" data-id="note-08a-dasher-pay-study" data-list="general">
+    <span class="nav-num">02</span>
+    <span class="nav-title">Dasher Pay — 复习卡</span>
+  </a>
+  <div class="nav-sub always-on expanded" data-parent="note-08a-dasher-pay-study">
+    <a href="#note-08a-dasher-pay-study-h-p1-base-pay" class="nav-sub-item" data-id="note-08a-dasher-pay-study-h-p1-base-pay" data-list="general">P1 · Base Pay</a><a href="#note-08a-dasher-pay-study-h-p2" class="nav-sub-item" data-id="note-08a-dasher-pay-study-h-p2" data-list="general">P2 · 在店等待</a><a href="#note-08a-dasher-pay-study-h-p3" class="nav-sub-item" data-id="note-08a-dasher-pay-study-h-p3" data-list="general">P3 · 峰时倍率</a><a href="#note-08a-dasher-pay-study-h-p4-production-follow-up" class="nav-sub-item" data-id="note-08a-dasher-pay-study-h-p4-production-follow-up" data-list="general">P4 · Production Follow-up</a>
+  </div>
+  <a href="#note-08b-bootstrap-api-study" class="nav-item" data-id="note-08b-bootstrap-api-study" data-list="general">
+    <span class="nav-num">03</span>
+    <span class="nav-title">Bootstrap API — 复习卡</span>
+  </a>
+  <div class="nav-sub always-on expanded" data-parent="note-08b-bootstrap-api-study">
+    <a href="#note-08b-bootstrap-api-study-h-p1" class="nav-sub-item" data-id="note-08b-bootstrap-api-study-h-p1" data-list="general">P1 · 聚合端点</a><a href="#note-08b-bootstrap-api-study-h-p2-production-follow-up" class="nav-sub-item" data-id="note-08b-bootstrap-api-study-h-p2-production-follow-up" data-list="general">P2 · Production Follow-up</a>
+  </div>
+  <a href="#note-08c-round-robin-study" class="nav-item" data-id="note-08c-round-robin-study" data-list="general">
+    <span class="nav-num">04</span>
+    <span class="nav-title">Round Robin Debugging — 复习卡（onsite 轮）</span>
+  </a>
+  <div class="nav-sub always-on expanded" data-parent="note-08c-round-robin-study">
+    <a href="#note-08c-round-robin-study-h-p1" class="nav-sub-item" data-id="note-08c-round-robin-study-h-p1" data-list="general">P1 · 修雷</a><a href="#note-08c-round-robin-study-h-p2-task-2" class="nav-sub-item" data-id="note-08c-round-robin-study-h-p2-task-2" data-list="general">P2 · Task 2 一致性哈希（必问的重设计）</a><a href="#note-08c-round-robin-study-h-p3-production-follow-up" class="nav-sub-item" data-id="note-08c-round-robin-study-h-p3-production-follow-up" data-list="general">P3 · Production Follow-up</a>
+  </div></nav>
+    <nav class="nav-list hidden" data-list="stars">
+  <a href="#story-01-optimization-120x" class="nav-item" data-id="story-01-optimization-120x" data-list="stars">
+    <span class="nav-num">01</span>
+    <span class="nav-title">Optimization — Runtime & Memory (120×, 20×, 75%)</span>
+  </a>
+  <a href="#story-02-backward-processing" class="nav-item" data-id="story-02-backward-processing" data-list="stars">
+    <span class="nav-num">02</span>
+    <span class="nav-title">Backward Processing — P99 Error Fix</span>
+  </a>
+  <a href="#story-03-ai-agent-skill" class="nav-item" data-id="story-03-ai-agent-skill" data-list="stars">
+    <span class="nav-num">03</span>
+    <span class="nav-title">AI Agent Skill — Golden Test Automation</span>
+  </a>
+  <a href="#story-04-satpvt-legacy-recovery" class="nav-item" data-id="story-04-satpvt-legacy-recovery" data-list="stars">
+    <span class="nav-num">04</span>
+    <span class="nav-title">Satpvt Service Bugfix — Legacy System Recovery</span>
+  </a>
+  <a href="#story-05-waymo-evaluation" class="nav-item" data-id="story-05-waymo-evaluation" data-list="stars">
+    <span class="nav-num">05</span>
+    <span class="nav-title">Waymo Evaluation — One-Week Deadline</span>
+  </a>
+  <a href="#story-06-ci-monitor-infrastructure" class="nav-item" data-id="story-06-ci-monitor-infrastructure" data-list="stars">
+    <span class="nav-num">06</span>
+    <span class="nav-title">CI to Monitor Infrastructure</span>
+  </a>
+  <a href="#story-07-base-station-backend" class="nav-item" data-id="story-07-base-station-backend" data-list="stars">
+    <span class="nav-num">07</span>
+    <span class="nav-title">Base Station Backend — Built Before Asked</span>
+  </a>
+  <a href="#story-08-hexagon-evaluation" class="nav-item" data-id="story-08-hexagon-evaluation" data-list="stars">
+    <span class="nav-num">08</span>
+    <span class="nav-title">Hexagon Evaluation — Million-Dollar Business Decision</span>
+  </a>
+  <a href="#story-09-technical-conflict" class="nav-item" data-id="story-09-technical-conflict" data-list="stars">
+    <span class="nav-num">09</span>
+    <span class="nav-title">Technical Conflict — Base Station Threshold</span>
+  </a>
+  <a href="#story-10-handling-growth" class="nav-item" data-id="story-10-handling-growth" data-list="stars">
+    <span class="nav-num">10</span>
+    <span class="nav-title">Negative Feedback — Handling Growth</span>
+  </a>
+  <a href="#story-11-mentorship" class="nav-item" data-id="story-11-mentorship" data-list="stars">
+    <span class="nav-num">11</span>
+    <span class="nav-title">Mentorship Through Real Delivery</span>
+  </a>
+  <a href="#story-12-v2-agent-harness-pivot" class="nav-item" data-id="story-12-v2-agent-harness-pivot" data-list="stars">
+    <span class="nav-num">12</span>
+    <span class="nav-title">V2 Agent Harness Pivot — Context → Harness Engineering</span>
+  </a>
+  <a href="#story-13-ai-force-multiplier" class="nav-item" data-id="story-13-ai-force-multiplier" data-list="stars">
+    <span class="nav-num">13</span>
+    <span class="nav-title">AI Force Multiplier — 10% Bandwidth Pattern</span>
+  </a>
+  <a href="#story-14-llm-as-judge-eval-framework" class="nav-item" data-id="story-14-llm-as-judge-eval-framework" data-list="stars">
+    <span class="nav-num">14</span>
+    <span class="nav-title">LLM-as-Judge Evaluation Framework</span>
+  </a>
+  <a href="#story-15-optimizer-as-fuzzer-pivot" class="nav-item" data-id="story-15-optimizer-as-fuzzer-pivot" data-list="stars">
+    <span class="nav-num">15</span>
+    <span class="nav-title">Optimizer-as-Fuzzer Pivot — From Tuning Tool to Auto-Bug-Fix Pipeline</span>
+  </a>
+  <a href="#story-16-ionosphere-ekf-paper" class="nav-item" data-id="story-16-ionosphere-ekf-paper" data-list="stars">
+    <span class="nav-num">16</span>
+    <span class="nav-title">Ionosphere Paper — Paper-to-Production via AI Orchestration</span>
+  </a></nav>
+    <nav class="nav-list hidden" data-list="sysdesign">
+  <a href="#sd-01-short-url" class="nav-item" data-id="sd-01-short-url" data-list="sysdesign">
+    <span class="nav-num">01</span>
+    <span class="nav-title">Short URL</span>
+  </a>
+  <a href="#sd-02-dropbox" class="nav-item" data-id="sd-02-dropbox" data-list="sysdesign">
+    <span class="nav-num">02</span>
+    <span class="nav-title">Dropbox</span>
+  </a>
+  <a href="#sd-03-gopuff" class="nav-item" data-id="sd-03-gopuff" data-list="sysdesign">
+    <span class="nav-num">03</span>
+    <span class="nav-title">Gopuff</span>
+  </a>
+  <a href="#sd-04-news-aggregator" class="nav-item" data-id="sd-04-news-aggregator" data-list="sysdesign">
+    <span class="nav-num">04</span>
+    <span class="nav-title">News Aggregator</span>
+  </a>
+  <a href="#sd-05-ticket-master" class="nav-item" data-id="sd-05-ticket-master" data-list="sysdesign">
+    <span class="nav-num">05</span>
+    <span class="nav-title">Ticket Master</span>
+  </a>
+  <a href="#sd-06-fb-news-feed" class="nav-item" data-id="sd-06-fb-news-feed" data-list="sysdesign">
+    <span class="nav-num">06</span>
+    <span class="nav-title">FB News Feed</span>
+  </a>
+  <a href="#sd-07-tinder" class="nav-item" data-id="sd-07-tinder" data-list="sysdesign">
+    <span class="nav-num">07</span>
+    <span class="nav-title">Tinder</span>
+  </a>
+  <a href="#sd-08-leetcode-r" class="nav-item" data-id="sd-08-leetcode-r" data-list="sysdesign">
+    <span class="nav-num">08</span>
+    <span class="nav-title">Leetcode</span>
+  </a>
+  <a href="#sd-09-online-chat" class="nav-item" data-id="sd-09-online-chat" data-list="sysdesign">
+    <span class="nav-num">09</span>
+    <span class="nav-title">Online Chat</span>
+  </a>
+  <a href="#sd-10-business-review-r" class="nav-item" data-id="sd-10-business-review-r" data-list="sysdesign">
+    <span class="nav-num">10</span>
+    <span class="nav-title">Business Review</span>
+  </a>
+  <a href="#sd-11-fitness-app" class="nav-item" data-id="sd-11-fitness-app" data-list="sysdesign">
+    <span class="nav-num">11</span>
+    <span class="nav-title">Fitness APP</span>
+  </a>
+  <a href="#sd-13-online-ah-r" class="nav-item" data-id="sd-13-online-ah-r" data-list="sysdesign">
+    <span class="nav-num">12</span>
+    <span class="nav-title">Online AH</span>
+  </a>
+  <a href="#sd-14-live-comment-r" class="nav-item" data-id="sd-14-live-comment-r" data-list="sysdesign">
+    <span class="nav-num">13</span>
+    <span class="nav-title">Live Comment</span>
+  </a>
+  <a href="#sd-15-fb-search" class="nav-item" data-id="sd-15-fb-search" data-list="sysdesign">
+    <span class="nav-num">14</span>
+    <span class="nav-title">FB Search</span>
+  </a>
+  <a href="#sd-16-price-tracking-system-r" class="nav-item" data-id="sd-16-price-tracking-system-r" data-list="sysdesign">
+    <span class="nav-num">15</span>
+    <span class="nav-title">Price Tracking System</span>
+  </a>
+  <a href="#sd-17-instagram-r" class="nav-item" data-id="sd-17-instagram-r" data-list="sysdesign">
+    <span class="nav-num">16</span>
+    <span class="nav-title">Instagram</span>
+  </a>
+  <a href="#sd-18-top-k-r" class="nav-item" data-id="sd-18-top-k-r" data-list="sysdesign">
+    <span class="nav-num">17</span>
+    <span class="nav-title">top k</span>
+  </a>
+  <a href="#sd-19-uber-r" class="nav-item" data-id="sd-19-uber-r" data-list="sysdesign">
+    <span class="nav-num">18</span>
+    <span class="nav-title">Uber</span>
+  </a>
+  <a href="#sd-20-robinhood-r" class="nav-item" data-id="sd-20-robinhood-r" data-list="sysdesign">
+    <span class="nav-num">19</span>
+    <span class="nav-title">RobinHOOD</span>
+  </a>
+  <a href="#sd-21-google-doc" class="nav-item" data-id="sd-21-google-doc" data-list="sysdesign">
+    <span class="nav-num">20</span>
+    <span class="nav-title">Google Doc</span>
+  </a>
+  <a href="#sd-22-distributed-cache" class="nav-item" data-id="sd-22-distributed-cache" data-list="sysdesign">
+    <span class="nav-num">21</span>
+    <span class="nav-title">Distributed Cache</span>
+  </a>
+  <a href="#sd-23-youtube-r" class="nav-item" data-id="sd-23-youtube-r" data-list="sysdesign">
+    <span class="nav-num">22</span>
+    <span class="nav-title">Youtube</span>
+  </a>
+  <a href="#sd-24-task-scheduler-r" class="nav-item" data-id="sd-24-task-scheduler-r" data-list="sysdesign">
+    <span class="nav-num">23</span>
+    <span class="nav-title">Task Scheduler</span>
+  </a>
+  <a href="#sd-25-web-crawler" class="nav-item" data-id="sd-25-web-crawler" data-list="sysdesign">
+    <span class="nav-num">24</span>
+    <span class="nav-title">Web Crawler</span>
+  </a>
+  <a href="#sd-26-ad-click-aggregation-r" class="nav-item" data-id="sd-26-ad-click-aggregation-r" data-list="sysdesign">
+    <span class="nav-num">25</span>
+    <span class="nav-title">Ad click Aggregation</span>
+  </a>
+  <a href="#sd-27-payment-system-r" class="nav-item" data-id="sd-27-payment-system-r" data-list="sysdesign">
+    <span class="nav-num">26</span>
+    <span class="nav-title">Payment System</span>
+  </a>
+  <a href="#sd-29-chatgpt" class="nav-item" data-id="sd-29-chatgpt" data-list="sysdesign">
+    <span class="nav-num">27</span>
+    <span class="nav-title">ChatGPT</span>
+  </a>
+  <a href="#sd-30-flash-sale-r" class="nav-item" data-id="sd-30-flash-sale-r" data-list="sysdesign">
+    <span class="nav-num">28</span>
+    <span class="nav-title">Flash Sale</span>
+  </a>
+  <a href="#sd-31-notification-system-r" class="nav-item" data-id="sd-31-notification-system-r" data-list="sysdesign">
+    <span class="nav-num">29</span>
+    <span class="nav-title">Notification System</span>
+  </a></nav>
+  </aside>
+  <main>
+    <div class="pane" data-pane="general">
+  <section id="note-07-doordash-backend-swe" class="story" data-pane="general">
+    <h1>DoorDash — Code Craft Technical Interview</h1>
+    
+    
+    <!-- 背景: recruiter call 8/13 完成, Prep Kit 8/24 到手, Round 1 = Code Craft 60min
+     (HackerRank, 5min intro + 45min coding + 10min 反问)。
+     题目弹药在 [[08a-Dasher-Pay-Study]] / [[08b-Bootstrap-API-Study]]。
+     2026-09-03 intro 改版: scope 项目→组(High Accuracy Location team), 贡献三线
+     (PB 级管道/原型到产品/验证系统+AI 飞轮), PolyU 段加落地证据(省时+真空泄漏)。
+     四支柱旧版与 recruiter 版 section 全存 git 历史; 若本版实战验证成功, 考虑回写 _01 模板。 --><h2 id="note-07-doordash-backend-swe-h-self-intro-50">开场 · Self-Intro（工程师版, ~50 秒）</h2>
+<blockquote>
+<p>Quick intro — I&#39;ve spent the last four years as a <strong>Software Engineer at Google</strong>, on the <span class="hint" data-title="组是什么 — 被问 &quot;tell me about the team&quot; 照念 (~25s)" data-tip="Let me give you the big picture. Our team owns &lt;b&gt;high-precision satellite positioning&lt;/b&gt; for Google's business clients. Some very important services depend on knowing &lt;i&gt;exactly&lt;/i&gt; where they are in the physical world: &lt;b&gt;Street View&lt;/b&gt; — one of the oldest; and in recent years &lt;b&gt;Waymo's robotaxis&lt;/b&gt; and &lt;b&gt;Wing's drone delivery&lt;/b&gt;. For those newer ones, positioning accuracy directly translates into &lt;b&gt;physical-world safety&lt;/b&gt; — so it has to be right.">High Accuracy Location team</span>. We provide high-precision positioning to Google&#39;s business clients — so <strong>Street View</strong> runs on it, <strong>Waymo&#39;s robotaxis</strong> run on it, <strong>Wing&#39;s delivery drones</strong> run on it.</p>
+<p>As for my own work — it comes down to a few things. <strong>First</strong>, implementation: I&#39;ve taken theory that lived only in research papers — formulas, math — and <span class="hint" data-title="实现线 — 追问展开 (引擎 → 分工 → 首选例子)" data-tip="The concrete thing: our &lt;b&gt;RTK pipeline&lt;/b&gt; — real-time kinematic positioning, the technique behind &lt;b&gt;centimeter-level accuracy&lt;/b&gt;. It started as a research prototype, and we hardened it step by step into an engine that survives real-world environments and edge cases — today it's the biggest source of our confidence in that accuracy.&lt;br&gt;&lt;br&gt;Work like this is a &lt;b&gt;researcher-engineer partnership&lt;/b&gt;. My side of it: understand the researchers' theory and what they need, and turn that into &lt;b&gt;reliable, scalable, deployable code&lt;/b&gt;.">built it into our positioning engine</span>, the thing that actually delivers that accuracy. <strong>Second</strong>, I maintain the <span class="hint" data-title="PB 级管道 — &quot;维护&quot;背后的真实故事 (~60s)" data-tip="What it is: the pipeline ingests observations from our &lt;b&gt;ground-station network&lt;/b&gt; and turns them into the &lt;b&gt;correction data&lt;/b&gt; that makes centimeter-level accuracy possible — petabytes, flowing continuously.&lt;br&gt;&lt;br&gt;The story behind &quot;maintain&quot;: the pipeline was designed by an engineer who left over &lt;b&gt;two years ago&lt;/b&gt;, and it ran on inherited knowledge. Then we started buying &lt;b&gt;third-party data&lt;/b&gt;, and the new feeds broke assumptions all over the place. I found the &lt;b&gt;three critical issues&lt;/b&gt; myself — and by the time I caught them, they had contaminated &lt;b&gt;hundreds of terabytes&lt;/b&gt; of historical data. We fixed the bugs and backfilled the history, and I turned the lessons into a &lt;b&gt;validation system&lt;/b&gt;: our production code replays each day's data on a schedule, sampling &lt;b&gt;uniformly&lt;/b&gt; across it, and any script that touches backfilled history automatically &lt;b&gt;triggers the historical checks&lt;/b&gt;. Since it went live it has caught real problems that would have reached downstream clients.&lt;br&gt;&lt;br&gt;So &quot;maintaining a petabyte pipeline&quot; means: &lt;b&gt;it's guarded by tests, not by memory&lt;/b&gt;.">petabyte-scale data pipeline</span> that feeds that engine its correction data. <strong>Third</strong>, I designed and still run our <span class="hint" data-title="验证系统 + AI 飞轮 — 追问展开 (~60s)" data-tip="How it's built: I assembled real-world recordings covering &lt;b&gt;every region we operate in&lt;/b&gt; — North America, South America, Europe, Oceania — each paired with &lt;b&gt;pre-established ground truth&lt;/b&gt;. Every change — an algorithm tweak, a data change — runs &lt;b&gt;end-to-end&lt;/b&gt; through the real system, and its effect shows up directly in the accuracy metrics against that ground truth. We watch the &lt;b&gt;long tail&lt;/b&gt; especially — averages hide the cases that actually hurt a client. So before anything ships, the system tells us plainly: &lt;b&gt;this is what your change does in production&lt;/b&gt;.&lt;br&gt;&lt;br&gt;And in the AI era it became the &lt;b&gt;flywheel&lt;/b&gt;: hand that verification to AI agents, and the feedback loop tightens another notch — AI writes a change, the system judges it against ground truth. I can let AI move fast because &lt;b&gt;I trust the safety net, not the model&lt;/b&gt;.">large-scale validation system</span> — it blocks bad releases before they reach a client, and it&#39;s become our feedback flywheel: it&#39;s what lets us ship fast with AI and still trust every release. <strong>And on top of that</strong>, I build <span class="hint" data-title="工具线 — MCP 封装验证系统 (~30s)" data-tip="The flagship tool: I wrapped our large-scale validation system as an &lt;b&gt;MCP server&lt;/b&gt; — a tool interface AI assistants can call. Engineers used to hand-pick test datasets and configure a pile of flags to run verification; now they just &lt;b&gt;talk to the AI&lt;/b&gt; — &quot;run the long-tail check on Europe&quot; — and it runs. That's the point of MCP: &lt;b&gt;expose the intent, hide the machinery&lt;/b&gt;.">tools that speed the whole team up</span> — and lately I&#39;ve started <span class="hint" data-title="自主落地论文 — 四年+AI 的兑现 (~40s)" data-tip="The payoff of four years of context plus the AI feedback loop: I recently took a years-old theory paper to production &lt;b&gt;entirely on my own — no researcher intervention&lt;/b&gt;. It fixed a long-tail accuracy problem and an infrastructure coverage gap: each ground station now serves &lt;b&gt;50 km instead of 20&lt;/b&gt;, North America coverage went from about &lt;b&gt;40% to essentially 100%&lt;/b&gt; — saving &lt;b&gt;millions of dollars a year&lt;/b&gt; in infrastructure spend that never had to happen.&lt;br&gt;&lt;br&gt;&lt;i&gt;术语按听众升级: 对定位背景才说 ionospheric delay / Kalman filter。&lt;/i&gt;">taking research to production on my own</span>.</p>
+<p>Then outside of Google, I&#39;ve got a part-time project funded by <strong>Hong Kong Polytechnic University</strong> — a <span class="hint" data-title="PolyU 车队 AI 系统 — 追问展开" data-tip="It's funded by &lt;b&gt;Hong Kong Polytechnic University&lt;/b&gt; — about a &lt;b&gt;million dollars&lt;/b&gt; — for a fuel-vehicle repair workshop: fleet monitoring plus &lt;b&gt;AI diagnosis and prediction&lt;/b&gt;. I'm the &lt;b&gt;sole engineer&lt;/b&gt;: architected everything from zero — frontend, backend, database, deployment, and the core &lt;b&gt;AI agent, built on an agent-harness architecture&lt;/b&gt; — and delivered it to the workshop in about &lt;b&gt;four months&lt;/b&gt;.&lt;br&gt;&lt;br&gt;It's live now, working the fleet. Early numbers: it cut the time a technician spends &lt;b&gt;diagnosing and documenting a vehicle&lt;/b&gt; by a large factor, and it caught a &lt;b&gt;vacuum leak before the failure ever surfaced&lt;/b&gt; — prediction paying off in the field.&lt;br&gt;&lt;br&gt;&lt;i&gt;对应 STAR: Story 12/13。追问架构: agent harness = 模型可换、工具与评估在 harness 层, 与 DoorDash JD 的 AI 要求直接咬合。&lt;/i&gt;">fleet-monitoring and AI-diagnosis system</span> for a vehicle repair workshop. I built the whole thing from zero — frontend, backend, and the AI agent at the core — and it&#39;s live in the workshop now. Technicians diagnose and document a vehicle in a fraction of the time, and it even caught a <strong>vacuum leak</strong> before the failure showed up.</p>
+<p>One more thing — I read a lot of technical papers and engineering blogs, partly to track where the industry is going, partly just because I enjoy it. Lately it&#39;s been all about <strong>running AI agents in production at scale</strong> — and two posts from <strong>DoorDash&#39;s own engineering blog</strong> stood out: one on the <span class="hint" data-title="博客① 仿真-评估飞轮 (Support 团队, 2026-01) — 追问口播 (~50s)" data-tip="The problem they solved: moving from decision trees to an LLM chatbot broke testing — &lt;b&gt;non-determinism&lt;/b&gt; means you can't trace a change's impact anymore, and the old choices were risky production tests or slow manual review.&lt;br&gt;&lt;br&gt;Their answer is two systems. An &lt;b&gt;offline simulator&lt;/b&gt; where an LLM plays the customer — pushback, frustration, escalation — with scenarios mined from real transcripts and mocked tools, arrange-act-assert like a unit test. And &lt;b&gt;calibrated LLM-as-judge&lt;/b&gt; evaluations — they trust a model to judge because verifying one narrow behavior is a much simpler task than generating it (the &lt;b&gt;generator-verifier gap&lt;/b&gt;), and they calibrate the judge against human labels until precision and recall clear a bar.&lt;br&gt;&lt;br&gt;Together it's a flywheel: baseline the pass rate, change the prompt, re-simulate, re-evaluate. Their case study — restructuring context into a &quot;case state&quot; — cut hallucinations by &lt;b&gt;90%&lt;/b&gt;, and it held in production. 200+ simulated conversations in under five minutes.&lt;br&gt;&lt;br&gt;&lt;i&gt;我的连接点: 和我们的 ground-truth 验证系统同一哲学 — 每个改动先过可信的判卷再上生产。&lt;/i&gt;">simulation-and-evaluation flywheel</span> behind your support chatbot, and one on the <span class="hint" data-title="博客② 多智能体清理 feature flag (Ads 团队, 2026-08) — 追问口播 (~50s)" data-tip="The scale: &lt;b&gt;60,000 flags across ~600 repos&lt;/b&gt;, a thousand-plus stale ones, and manual cleanup takes an engineer an hour or two each. AST tools like Piranha can't help — their flags hide behind a three-layer dependency-injected wrapper, a &lt;b&gt;semantic&lt;/b&gt; relationship, not a syntactic one. And the right target value isn't even in the code — it's the &lt;b&gt;live rollout state&lt;/b&gt; in the experimentation platform.&lt;br&gt;&lt;br&gt;The system: an orchestrator agent reads the Jira queue and queries rollout state &lt;b&gt;over MCP&lt;/b&gt;, drafts a report; one human checkpoint confirms target values; then parallel removal agents work in &lt;b&gt;isolated git worktrees&lt;/b&gt;, and no PR opens until build, tests, a &lt;b&gt;95% patch-coverage gate&lt;/b&gt; and the linter all pass, under a hard one-hour timeout.&lt;br&gt;&lt;br&gt;Results: 45 of 50 flags became merge-ready PRs at about &lt;b&gt;$5 and 14 minutes each&lt;/b&gt; — and zero regressions. Their line stuck with me: the failure boundary is &lt;b&gt;completeness, not correctness&lt;/b&gt; — when the agent fails, it fails safely.&lt;br&gt;&lt;br&gt;&lt;i&gt;我的连接点: 这就是我的 guardrail 论点 — 让 agent 全力跑, 用确定性门禁圈住它; 他们用 MCP 读实时状态, 和我把验证系统封装成 MCP 是同一个直觉。&lt;/i&gt;">multi-agent system that cleans up stale feature flags</span>. They stuck with me because they match my own conviction: today&#39;s models are plenty powerful — the real secret to production AI is the <strong>guardrails</strong>: letting the model run as hard as possible while staying reliably inside the lines. Your team&#39;s writing has genuinely shaped my thinking.</p>
+<p>That&#39;s me — happy to dive in.</p>
+</blockquote>
+<p>规则提醒: 口语只说 &quot;Software Engineer at Google&quot; · 正文唯一的规模词是 petabyte —— 其余数字全在悬停卡里等追问。</p>
+<h2 id="note-07-doordash-backend-swe-h-10-2-3">收尾 · 反问（10 分钟, 对工程师, 问 2-3 个）</h2>
+<ul>
+<li><em>&quot;What does a typical on-call week look like on your team?&quot;</em>（工程师最有话说，真信息）</li>
+<li><em>&quot;The JD puts AI coding proficiency in the required quals — how does that actually show up in your day-to-day?&quot;</em>（人设强化，与 AI 飞轮线咬合）</li>
+<li><em>&quot;What&#39;s the biggest backend scaling pain your team is fighting right now?&quot;</em></li>
+<li><strong>AI 话题弹药</strong>（他接 AI 话头 / 问 how do you use AI 时）: <span class="hint" data-title="我对 AI 的三点思考 — 照念 (~60s)" data-tip="Three things I've learned working AI-native.&lt;br&gt;&lt;br&gt;&lt;b&gt;First — garbage in, garbage out, but at the context level, not the prompt level.&lt;/b&gt; The game moved from writing a clever prompt to feeding the model the right context, fast. My answer is a &lt;b&gt;personal knowledge base&lt;/b&gt;: every session's lessons get distilled into it, and the AI reads it directly at the start of the next one. So the more I work with AI, the richer the base — and the faster every new session starts. &lt;b&gt;It compounds.&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Second — reliability: I never trust an AI's assertion.&lt;/b&gt; It has to show real evidence — the actual code it read, an actual test run, real output. Truth comes from the real world, and I verify at the boundaries: what went in, what came out.&lt;br&gt;&lt;br&gt;&lt;b&gt;Third — small tools change more than you'd expect.&lt;/b&gt; One example: for design docs I have the AI generate an &lt;b&gt;interactive HTML page&lt;/b&gt; instead of a static Markdown draft — you adjust the plan live, inside the artifact. A static document loses your attention; an interactive one holds it.&lt;br&gt;&lt;br&gt;Happy to go deeper on any of these.">我对 AI 的三点思考</span></li>
+</ul>
+<h2 id="note-07-doordash-backend-swe-h-section">简历追问 · 弹药</h2>
+<ul>
+<li><strong>120× 优化</strong>（简历 bullet 被点名时）: <span class="hint" data-title="120× 优化 — 简历追问口播 (~60s, 收尾转向新故事)" data-tip="Honest framing first: this one is &lt;b&gt;high-impact but, by today's standards, not deep&lt;/b&gt; — which makes it a good story about growth.&lt;br&gt;&lt;br&gt;The setup: I had just joined. The team was researchers, and the pipeline was prototype code — very slow, and memory per container far above budget. I studied the code end to end, profiled it with &lt;b&gt;log-based breakpoints&lt;/b&gt; to find the bottlenecks, then did three things: &lt;b&gt;refactored the matrix computation&lt;/b&gt;, &lt;b&gt;cut unnecessary database queries&lt;/b&gt;, and &lt;b&gt;tightened memory usage&lt;/b&gt;. That's where the 120× came from — under one hard constraint: the output had to stay &lt;b&gt;byte-for-byte identical&lt;/b&gt;.&lt;br&gt;&lt;br&gt;The honest part: back then it took me about &lt;b&gt;a month&lt;/b&gt; — learning the codebase, fixing, validating. Today that's &lt;b&gt;an afternoon&lt;/b&gt;, in parallel with something else — four years of context and AI-era tooling changed what &quot;hard&quot; means. Which is why the stories I'd rather tell are the newer ones — &lt;b&gt;happy to switch to one of those&lt;/b&gt;.&lt;br&gt;&lt;br&gt;&lt;i&gt;收尾那句是转向阀: 顺势切到电离层 (solo 卡) 或 pipeline 救火故事。&lt;/i&gt;">低技术高影响 + 成长对比</span></li>
+</ul>
+
+  </section>
+  <section id="note-08a-dasher-pay-study" class="story" data-pane="general">
+    <h1>Dasher Pay — 复习卡</h1>
+    
+    
+    <blockquote>
+<p>题: 一个 dasher 一天的订单事件流（ACCEPTED / FULFILLED / CANCELED），$0.30/min，≥1 单进行中即计薪。求全天 pay（cents）。悬停虚线词展开弹药，点击钉住，Esc 收起。</p>
+</blockquote>
+<h2 id="note-08a-dasher-pay-study-h-p1-base-pay">P1 · Base Pay</h2>
+<p><strong>Clarify</strong></p>
+<ul>
+<li><strong>格式</strong>: <span class="hint" data-title="格式 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;Are timestamps epoch numbers, or datetime strings?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;First thing, I'll parse everything to epoch seconds — after that, time math is just subtraction.&quot;&lt;br&gt;・记: // timestamps -&amp;gt; convert to epoch numbers once, then math on plain numbers">epoch or datetime strings?</span></li>
+<li><strong>舍入</strong>: <span class="hint" data-title="舍入 — 带数字的三选一" data-tip="・问: &lt;b&gt;&quot;Say a delivery takes 10 minutes 30 seconds — do I pay for the exact seconds, round down to 10, or round up to 11?&quot;&lt;/b&gt;&lt;br&gt;・记: // partial minute: pay exact seconds? round down? round up?  (seconds: sec * rate / 60)">10 min 30 s — exact / down / up?</span></li>
+<li><strong>排序</strong>: <span class="hint" data-title="排序 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;Are events sorted by time, or should I sort defensively?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;Sort will dominate — O(n log n), the sweep itself is linear.&quot;&lt;br&gt;・记: // events may be unsorted -&amp;gt; sort by time first">sorted, or sort defensively?</span></li>
+<li><strong>并发</strong>: <span class="hint" data-title="并发 — 问句 + 双分支钩子" data-tip="・问: &lt;b&gt;&quot;When two orders overlap, does the dasher earn double — or one flat rate?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;Same skeleton either way: I'll track how many orders are active at each moment — flat pays whenever that's above zero, multiply pays times that count.&quot;&lt;br&gt;・记: // 2 orders at once = 2x pay?  or 1x while any order active?">overlap → multiply or flat?</span></li>
+<li><strong>取消</strong>: <span class="hint" data-title="取消 — 干净的 A or B" data-tip="・问: &lt;b&gt;&quot;A canceled order — keep the pay earned so far, or pay nothing?&quot;&lt;/b&gt;&lt;br&gt;・记: // canceled order: keep money earned before cancel?  or $0?">keep accrued pay, or nothing?</span></li>
+<li><strong>未关单</strong>: <span class="hint" data-title="未关单 — 假设确认 + 钩子" data-tip="・问: &lt;b&gt;&quot;An order accepted but never closed by end of day — I assume it pays nothing. Correct?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;Good — my approach only pays an order once it's properly closed, so that case costs nothing extra.&quot;&lt;br&gt;・记: // order never finished -&amp;gt; $0, normal case, do NOT throw">never closed → pays nothing, correct?</span></li>
+<li><strong>脏数据</strong>: <span class="hint" data-title="脏数据 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;On corrupt data — duplicate ACCEPTED, or closing an order that isn’t open — fail fast or skip?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;Fail fast — for money, a loud failure beats a silent guess. Fixing bad data is a separate job — this function just refuses it.&quot;&lt;br&gt;・记: // bad data (double accept, close unopened) -&amp;gt; throw, never guess">fail fast or skip?</span></li>
+<li><strong>单号复用</strong>: <span class="hint" data-title="单号复用 — 声明假设式四拍（照念）" data-tip="・问: &lt;b&gt;&quot;I'll assume order IDs are guaranteed unique upstream, at the database layer. Then the only way a repeated ID reaches me is the same events delivered twice — and after sorting, that hits my duplicate-ACCEPTED check anyway. So no special handling needed — fair?&quot;&lt;/b&gt;&lt;br&gt;・记: // order ids unique upstream -&amp;gt; no extra duplicate tracking here">声明假设四拍 — fair?</span></li>
+</ul>
+<p><strong>Verify</strong></p>
+<ul>
+<li><strong>Base</strong>: <span class="hint" data-title="单订单全程" data-tip="accept@0 → fulfill@30&lt;br&gt;⇒ 30 min × rate&lt;br&gt;学名: &lt;b&gt;single order lifecycle (happy path)&lt;/b&gt;">单订单全程</span> · <span class="hint" data-title="并发重叠" data-tip="A[0,20) + B[10,30) ⇒ 分段 1/2/1 单&lt;br&gt;⇒ (10 + 10×2 + 10) order-min × rate&lt;br&gt;学名: &lt;b&gt;overlapping concurrent orders&lt;/b&gt;">并发重叠</span> · <span class="hint" data-title="订单间空档" data-tip="A[0,10), B[20,30) ⇒ 中间 10 min 无单不计薪&lt;br&gt;⇒ 20 min × rate&lt;br&gt;学名: &lt;b&gt;idle gap between orders&lt;/b&gt;">订单间空档</span></li>
+<li><strong>Corner</strong>: <span class="hint" data-title="重复关单" data-tip="A fulfill@10 之后再来一个 A fulfill@20&lt;br&gt;⇒ &lt;b&gt;IllegalStateException&lt;/b&gt;&lt;br&gt;学名: &lt;b&gt;duplicate terminal event&lt;/b&gt;">重复关单</span> · <span class="hint" data-title="零时长单" data-tip="accept@5 + fulfill@5（同一时刻）&lt;br&gt;⇒ $0，合法不报错&lt;br&gt;学名: &lt;b&gt;zero-duration order&lt;/b&gt;">零时长</span> · <span class="hint" data-title="同刻交接" data-tip="A fulfill@10 + B accept@10&lt;br&gt;⇒ 无缝交接不重不漏 ⇒ A 10 min + B 15 min&lt;br&gt;学名: &lt;b&gt;same-timestamp handoff&lt;/b&gt;">同刻交接</span> · <span class="hint" data-title="未关单" data-tip="A 完整生命周期 + B accept 后无下文&lt;br&gt;⇒ 只算 A，B 整单排除（不报错）&lt;br&gt;学名: &lt;b&gt;never-closed (dangling) order&lt;/b&gt;">未关单</span> · <span class="hint" data-title="取消单" data-tip="accept@0, cancel@15&lt;br&gt;⇒ 按 clarify 契约: 照付则 15 min × rate；不付则 $0&lt;br&gt;学名: &lt;b&gt;mid-delivery cancellation&lt;/b&gt;">取消单</span> · <span class="hint" data-title="乱序输入" data-tip="把单订单两事件反序喂入&lt;br&gt;⇒ 排序后结果不变&lt;br&gt;学名: &lt;b&gt;out-of-order input&lt;/b&gt;">乱序</span> · <span class="hint" data-title="空输入" data-tip="[] / null&lt;br&gt;⇒ 0&lt;br&gt;学名: &lt;b&gt;empty input&lt;/b&gt;">空输入</span></li>
+</ul>
+<h2 id="note-08a-dasher-pay-study-h-p2">P2 · 在店等待</h2>
+<p><strong>Clarify</strong></p>
+<ul>
+<li><strong>加需求</strong>: <span class="hint" data-title="P2 加的需求" data-tip="新增 &lt;b&gt;ARRIVED&lt;/b&gt;（到店）/ &lt;b&gt;PICKED_UP&lt;/b&gt;（取餐）&lt;br&gt;・记: // time between ARRIVED and PICKED_UP = unpaid (that order only)">ARRIVED / PICKED_UP，在店等待不计薪</span> — 开口先声明 P1 合同延续</li>
+<li><strong>暂停范围</strong>: <span class="hint" data-title="暂停范围 — 本 Part 最大分岔" data-tip="・问: &lt;b&gt;&quot;Does waiting at the store pause all pay, or only that order’s?&quot;&lt;/b&gt;&lt;br&gt;・记: // waiting stops pay for THAT order only; other orders keep earning">all pay, or only that order&#39;s?</span></li>
+<li><strong>新状态合法性</strong>: <span class="hint" data-title="新状态合法性 — 声明假设（照念）" data-tip="・问: &lt;b&gt;&quot;I'll assume the same fail-fast policy: double ARRIVED, double PICKED_UP, or PICKED_UP before ARRIVED are corrupt — same exception. Fair?&quot;&lt;/b&gt;&lt;br&gt;・记: // arrive / pickup out of order = bad data -&amp;gt; throw">声明假设 — same exception, fair?</span></li>
+</ul>
+<p><strong>Verify</strong></p>
+<ul>
+<li><strong>Base</strong>: <span class="hint" data-title="全程含等待" data-tip="acc@0, arr@10, pick@20, ful@40&lt;br&gt;⇒ 付 [0,10) + [20,40) = 30 min × rate，等待 10 min 不付&lt;br&gt;学名: &lt;b&gt;full lifecycle with store wait&lt;/b&gt;">全程含等待</span> · <span class="hint" data-title="等待×并发（证明 per-order 的用例）" data-tip="全程含等待例 + B acc@5, ful@15&lt;br&gt;⇒ payable 1/2/1/0/1 ⇒ 40 order-min × rate&lt;br&gt;学名: &lt;b&gt;overlap across a waiting window&lt;/b&gt;&lt;br&gt;&lt;br&gt;核心行口播: &lt;b&gt;&quot;Closing an order that's still waiting doesn't touch the count — it already stopped counting when the dasher arrived.&quot;&lt;/b&gt;&lt;br&gt;&lt;i&gt;数据物理不合理时: &quot;Physically odd — but events are ground truth for pay. Moving on.&quot;&lt;/i&gt;">等待×并发</span></li>
+<li><strong>Corner</strong>: <span class="hint" data-title="跳过到店" data-tip="PICKED_UP without ARRIVED&lt;br&gt;⇒ &lt;b&gt;IllegalStateException&lt;/b&gt;&lt;br&gt;学名: &lt;b&gt;illegal transition (skip ARRIVED)&lt;/b&gt;">跳过到店</span> · <span class="hint" data-title="无店态直达" data-tip="ACCEPTED → FULFILLED 直达（不经过店态）&lt;br&gt;⇒ &lt;b&gt;合法&lt;/b&gt; — P1 形态订单仍混在流里，店态是可选遥测&lt;br&gt;学名: &lt;b&gt;order without store states (legal)&lt;/b&gt;">无店态直达</span> · <span class="hint" data-title="等待中取消" data-tip="acc@0, arr@10, cancel@15&lt;br&gt;⇒ 只付 [0,10)（等待中关单不动计数）&lt;br&gt;学名: &lt;b&gt;cancellation while waiting&lt;/b&gt;">等待中取消</span></li>
+</ul>
+<h2 id="note-08a-dasher-pay-study-h-p3">P3 · 峰时倍率</h2>
+<p><strong>Clarify</strong></p>
+<ul>
+<li><strong>加需求</strong>: <span class="hint" data-title="P3 加的需求" data-tip="峰时窗口费率 &lt;b&gt;×N&lt;/b&gt;，&lt;b&gt;每日循环&lt;/b&gt;，回到简单三状态&lt;br&gt;・记: // peak window: higher rate, repeats every day, split pay at window edges">峰时 ×2，每日循环</span> — 合同延续（含倍率）</li>
+<li><strong>窗口形态</strong>: <span class="hint" data-title="窗口形态 — 定签名的一问" data-tip="・问: &lt;b&gt;&quot;Is the peak window fixed or configurable? One contiguous window — and can it wrap past midnight?&quot;&lt;/b&gt;&lt;br&gt;・记: // window comes in as parameters, do not hardcode 5-7pm; ask: can it cross midnight?">fixed or configurable? wrap?</span></li>
+<li><strong>参数校验</strong>: <span class="hint" data-title="参数校验 — 声明假设（照念）" data-tip="・问: &lt;b&gt;&quot;Bad window config — end before start, out of range — is a caller bug, not dirty data: I'll throw IllegalArgumentException there, keeping IllegalStateException for corrupt events. Fair?&quot;&lt;/b&gt;&lt;br&gt;・记: // wrong parameters -&amp;gt; IllegalArgumentException; wrong data -&amp;gt; IllegalStateException">IAE vs ISE — fair?</span></li>
+</ul>
+<p><strong>Verify</strong></p>
+<ul>
+<li><strong>Base</strong>: <span class="hint" data-title="跨界入窗" data-tip="acc@16:50, ful@17:10, 窗 [17:00,19:00)&lt;br&gt;⇒ 10 min 常价 + 10 min 峰价，边界处切开&lt;br&gt;学名: &lt;b&gt;delivery straddling the peak boundary&lt;/b&gt;">跨界入窗</span> · <span class="hint" data-title="倍率×峰时叠加" data-tip="A[1010,1030) + B[1020,1040), 窗从 1020 起&lt;br&gt;⇒ 等效分钟法: 每段报 分钟×单数×倍率，最后一次乘 rate ⇒ 10+40+20 = 70 等效分钟&lt;br&gt;学名: &lt;b&gt;concurrency stacked on peak rate&lt;/b&gt;">倍率×峰时</span></li>
+<li><strong>Corner</strong>: <span class="hint" data-title="非法窗口参数" data-tip="end ≤ start / 越界&lt;br&gt;⇒ &lt;b&gt;IllegalArgumentException&lt;/b&gt;（配置错，不是数据脏）&lt;br&gt;学名: &lt;b&gt;invalid window config&lt;/b&gt;">非法窗口</span> · <span class="hint" data-title="跨天窗口" data-tip="同一订单整体挪到第 2 天（ts + 1440）&lt;br&gt;⇒ 结果不变 — 窗口每日循环&lt;br&gt;学名: &lt;b&gt;next-day recurrence&lt;/b&gt;">跨天窗口</span> · <span class="hint" data-title="负时间戳" data-tip="epoch 可为负&lt;br&gt;⇒ 用 &lt;b&gt;floorDiv / floorMod&lt;/b&gt;，不是 / 和 %&lt;br&gt;学名: &lt;b&gt;negative epoch timestamps&lt;/b&gt;">负时间戳</span></li>
+</ul>
+<h2 id="note-08a-dasher-pay-study-h-p4-production-follow-up">P4 · Production Follow-up</h2>
+<p>大题照行串联（行首悬停 = 原题 + 串联序），小题直击小卡。</p>
+<ul>
+<li><span class="hint" data-title="服务化 — 大题" data-tip="&lt;i&gt;&quot;How do you turn this from a batch script into a service?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 接口身份 → 取数方式 → 信任边界&lt;br&gt;&lt;br&gt;收尾句: &lt;b&gt;&quot;The math stays a pure core; everything operational wraps around it.&quot;&lt;/b&gt;">服务化</span>: <span class="hint" data-title="接口身份" data-tip="&lt;i&gt;&quot;What does the service interface look like?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;I'd put the pure function behind an endpoint, and the request is just two things: which dasher, and which day. Same inputs always give the same answer, so the endpoint is naturally &lt;b&gt;idempotent&lt;/b&gt;, and I can &lt;b&gt;cache&lt;/b&gt; it.">接口身份</span> · <span class="hint" data-title="取数方式" data-tip="&lt;i&gt;&quot;Where does the service get its data?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The caller doesn't hand me a list of events anymore. The service goes and &lt;b&gt;pulls&lt;/b&gt; the dasher's events from the order system — or &lt;b&gt;subscribes&lt;/b&gt; to an event stream and keeps its own view.">取数方式</span> · <span class="hint" data-title="信任边界" data-tip="&lt;i&gt;&quot;What happens to error handling once it's a service?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The core function still throws on corrupt data — but now an &lt;b&gt;orchestrator&lt;/b&gt; above it catches the failure and routes it to repair. And the actual payout sits behind an idempotency key, so a retry can never pay twice.">信任边界</span></li>
+<li><span class="hint" data-title="上游失败 — 大题" data-tip="&lt;i&gt;&quot;The events API is failing — what do you do?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 重试 → 熔断 → 降级 → 毒消息">上游失败</span>: <span class="hint" data-title="重试" data-tip="&lt;i&gt;&quot;What's your retry policy?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Exponential backoff — wait one second, then two, then four — with &lt;b&gt;jitter&lt;/b&gt;, a small random offset so a thousand clients don't all retry in the same instant. And a &lt;b&gt;cap&lt;/b&gt;, both ways: give up after about three attempts, and never let the wait grow absurd.">重试</span> · <span class="hint" data-title="熔断" data-tip="&lt;i&gt;&quot;What if the upstream keeps failing?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;circuit breaker&lt;/b&gt; trips: after enough consecutive failures we stop calling it entirely for a while, so a dying upstream doesn't drag us down with it. And every request carries a &lt;b&gt;deadline budget&lt;/b&gt; — we never wait longer than our own SLA allows.">熔断</span> · <span class="hint" data-title="降级" data-tip="&lt;i&gt;&quot;What do you return when you can't get fresh data?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;For the live earnings view: the last cached snapshot, &lt;b&gt;clearly marked as stale&lt;/b&gt; — an as-of timestamp in the response so every client can show &quot;updated an hour ago&quot;. Honestly stale beats silently wrong. For the actual payout run: &lt;b&gt;never&lt;/b&gt; — settlement waits for complete data.">降级</span> · <span class="hint" data-title="毒消息" data-tip="&lt;i&gt;&quot;What do you do with messages you can't process?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;dead-letter queue&lt;/b&gt; — a standard messaging pattern: a message that repeatedly fails processing gets moved, &lt;b&gt;the message itself&lt;/b&gt;, into a side queue with the failure reason attached. One poison message can't block the stream, and because the original is preserved, it can be fixed and &lt;b&gt;replayed&lt;/b&gt; later.">毒消息</span></li>
+<li><span class="hint" data-title="防重付 — 大题" data-tip="&lt;i&gt;&quot;How do you guarantee a dasher is never paid twice?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 幂等键 → 事务外箱 → 对账 → 审计日志">防重付</span>: <span class="hint" data-title="幂等键" data-tip="&lt;i&gt;&quot;How does the idempotency key work?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Each payment &lt;b&gt;instruction&lt;/b&gt; carries its own key — dasher, date, plus a sequence number. The key stops any single instruction from executing twice; a later top-up is a &lt;b&gt;different&lt;/b&gt; instruction with its own key, so it isn't mistaken for a duplicate. A ledger ties the instructions together and checks the day's total.">幂等键</span> · <span class="hint" data-title="事务外箱" data-tip="&lt;i&gt;&quot;What's a transactional outbox and why do you need one?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Recording the payment intent and sending the payment message are two systems — crash between them and you've either paid without a record, or recorded without paying. The outbox writes both into &lt;b&gt;one database transaction&lt;/b&gt;; a relay delivers the message afterwards. The outbox guarantees &lt;b&gt;at-least-once&lt;/b&gt; delivery, the idempotency key caps it at &lt;b&gt;at-most-once&lt;/b&gt; effect — together that's exactly-once, which neither achieves alone.">事务外箱</span> · <span class="hint" data-title="对账" data-tip="&lt;i&gt;&quot;What does reconciliation do?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A nightly job sweeps for &lt;b&gt;orphans&lt;/b&gt; — payment intents recorded but never confirmed, or paid amounts that don't match the recomputed total — and trues them up. It's the safety net under everything the synchronous path might drop.">对账</span> · <span class="hint" data-title="审计日志" data-tip="&lt;i&gt;&quot;Why an audit log?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Every mutation lands in an &lt;b&gt;append-only&lt;/b&gt; log — nothing is ever edited in place. With money, you want to replay history and get the same answer, and prove after any incident exactly what happened and who received what.">审计日志</span></li>
+<li><span class="hint" data-title="乱序脏数据 — 大题" data-tip="&lt;i&gt;&quot;Events arrive out of order, duplicated, corrupted — at scale?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 水位线 → 去重 → 负计数报警&lt;br&gt;&lt;br&gt;开场姿态: &lt;b&gt;&quot;I'd treat disorder as normal, not as an error&quot;&lt;/b&gt; — with at-least-once delivery, duplicates and reordering are contractual, not accidents.">乱序脏数据</span>: <span class="hint" data-title="水位线" data-tip="&lt;i&gt;&quot;How do you handle late and out-of-order events?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Sort within a &lt;b&gt;watermark&lt;/b&gt; window — a moving line that says &quot;everything before time T has arrived by now&quot;. Buffer and reorder freely before the line; once the watermark passes, that period's books are sealed. Anything arriving later goes down a &lt;b&gt;late-event side path&lt;/b&gt; to reconciliation — it never reopens sealed books.">水位线</span> · <span class="hint" data-title="去重" data-tip="&lt;i&gt;&quot;How do you handle duplicate events?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Every event carries a unique id; the consumer keeps a seen-set and drops repeats. The set stays bounded because it only has to cover the watermark window — sealed periods can be evicted.">去重</span> · <span class="hint" data-title="负计数报警" data-tip="&lt;i&gt;&quot;How do you detect corruption that slips through?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;I keep a running count of in-progress orders. If that count ever goes &lt;b&gt;negative&lt;/b&gt; — more orders closed than ever opened, impossible with sane data — I &lt;b&gt;alert&lt;/b&gt;. I never clamp it to zero, because clamping makes the number look sane while hiding real corruption upstream.">负计数报警</span></li>
+<li><span class="hint" data-title="未关单生产版 🔥 — 大题" data-tip="&lt;i&gt;&quot;So never-closed orders just pay nothing?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 三种混叠 → 清扫器 → 对账回填 → 垫付原则">未关单生产版 🔥</span>: <span class="hint" data-title="三种混叠" data-tip="&lt;i&gt;&quot;Why not just pay nothing on never-closed orders?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Because in production that state is &lt;b&gt;ambiguous&lt;/b&gt; — the order was abandoned, or it's still running, or we lost the closing event — and the stream alone can't tell you which. Any one-size rule punishes somebody, so the state has to be resolved, not assumed.">三种混叠</span> · <span class="hint" data-title="清扫器" data-tip="&lt;i&gt;&quot;How do you stop orders staying open forever?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;timeout sweeper&lt;/b&gt;: a background job force-terminates any order with no activity past an SLA. In a mature system &quot;never-closed&quot; doesn't survive — it gets converted into an explicit terminal state and flagged for review.">清扫器</span> · <span class="hint" data-title="对账回填" data-tip="&lt;i&gt;&quot;How do you find the true end time?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The event stream is &lt;b&gt;derived data, not the source of truth&lt;/b&gt;. The order system's authoritative state, delivery confirmation, customer signature — the real end time can almost always be recovered from somewhere. Reconciliation backfills it and triggers a recompute.">对账回填</span> · <span class="hint" data-title="垫付原则" data-tip="&lt;i&gt;&quot;Do you pay anything while it's unresolved?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;If we pay interim money, it's anchored to the &lt;b&gt;last activity we actually observed&lt;/b&gt; — last event, last GPS ping — marked provisional, and trued up after reconciliation. Paying zero and telling the dasher &quot;go appeal&quot; would shift &lt;b&gt;our&lt;/b&gt; data bug onto the worker — not acceptable.">垫付原则</span></li>
+<li><span class="hint" data-title="抛异常之后 🔥 — 大题" data-tip="&lt;i&gt;&quot;Your function throws. Then what?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 修复队列 → 部分结算 → 补差支付&lt;br&gt;&lt;br&gt;答案眼: &lt;b&gt;&quot;The recomputation is automatic; finding the truth is the part I won't promise to automate.&quot;&lt;/b&gt;">抛异常之后 🔥</span>: <span class="hint" data-title="修复队列" data-tip="&lt;i&gt;&quot;Your function throws — what catches it?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The orchestrator catches it and publishes a &lt;b&gt;structured failure record&lt;/b&gt; — who, which day, what kind of error — onto a high-priority repair queue. Known corruption patterns get auto-repaired: dedupe, or backfill from the order system. Anything new goes to a &lt;b&gt;human&lt;/b&gt; — dirty data means the log contradicts itself, and someone has to decide what's true.">修复队列</span> · <span class="hint" data-title="部分结算" data-tip="&lt;i&gt;&quot;Does one bad order block the dasher's whole payout?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;No — pay &lt;b&gt;decomposes per order&lt;/b&gt;: each order contributes its own minutes times the rate, independent of the others. So we quarantine the bad order's events by order id and settle the other ninety-nine immediately — provably without distorting them.">部分结算</span> · <span class="hint" data-title="补差支付" data-tip="&lt;i&gt;&quot;How is the repaired order paid without double-paying?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Once repaired, the same pure function re-runs, and the fixed order goes out as a &lt;b&gt;top-up for just the difference&lt;/b&gt;. It's a new payment instruction with its own idempotency key — dasher, date, sequence number — so retries can't double-pay it, and it isn't mistaken for a duplicate of the first payout. The ledger reconciles the day's total.">补差支付</span></li>
+<li><span class="hint" data-title="全量扩展 — 大题" data-tip="&lt;i&gt;&quot;Millions of dashers, streaming all day?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 分片 → 内存 → 聚合表">全量扩展</span>: <span class="hint" data-title="分片" data-tip="&lt;i&gt;&quot;How does this scale to millions of dashers?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The computation is &lt;b&gt;per-dasher independent&lt;/b&gt;, so it shards cleanly by dasher id — that's the partition key. And if events come through Kafka, partitioning by dasher gives me &lt;b&gt;ordering exactly where I need it, for free&lt;/b&gt; — order only matters within one dasher's stream.">分片</span> · <span class="hint" data-title="内存" data-tip="&lt;i&gt;&quot;What's the memory footprint of streaming a whole day?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Within one partition I keep just a &lt;b&gt;running total and the currently open orders&lt;/b&gt;, and discard every event that's already settled. Memory scales with open orders — a handful — not with the whole day's event volume.">内存</span> · <span class="hint" data-title="聚合表" data-tip="&lt;i&gt;&quot;Where do reads go at scale?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Daily totals roll up into an &lt;b&gt;aggregate table&lt;/b&gt; via ETL, and the pay endpoint reads that table — not the raw events. Raw events stay in the pipeline for computing and audit; serving reads is a table lookup.">聚合表</span></li>
+<li><span class="hint" data-title="读热点 — 大题" data-tip="&lt;i&gt;&quot;The pay endpoint gets hammered — 1000 QPS?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 缓存 → 慢上游升级链">读热点</span>: <span class="hint" data-title="缓存" data-tip="&lt;i&gt;&quot;The endpoint gets 1000 QPS — what do you do?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Cache it&lt;/b&gt; — keyed by dasher and day, short TTL, cache-aside, invalidated when a new event lands. The number only moves minute by minute anyway, so even a thirty-second TTL soaks up most of the traffic.">缓存</span> · <span class="hint" data-title="慢上游升级链" data-tip="&lt;i&gt;&quot;A dependency is slow — how do you protect your latency?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Three escalating moves. A per-request &lt;b&gt;timeout&lt;/b&gt; below my own SLA — cut the loss. A &lt;b&gt;hedged&lt;/b&gt; second request near the deadline — race two, take the faster. And if the upstream is &lt;b&gt;chronically&lt;/b&gt; slow: flip the endpoint &lt;b&gt;async&lt;/b&gt; — accept, return immediately, deliver the result by webhook when ready. Then my latency and theirs are decoupled. Meanwhile reads fall back to last-known-good, marked stale, rather than blocking.">慢上游升级链</span></li>
+<li><span class="hint" data-title="生产测试 — 大题" data-tip="&lt;i&gt;&quot;How would you test this in production code?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 单元 → 属性 → 影子">生产测试</span>: <span class="hint" data-title="单元" data-tip="&lt;i&gt;&quot;How do you unit-test it?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Table-driven tests over the whole rule matrix — the same cases I walked through here: the happy path, concurrency, cancellation, boundary splits, and the corrupt inputs that should &lt;b&gt;throw&lt;/b&gt;.">单元</span> · <span class="hint" data-title="属性" data-tip="&lt;i&gt;&quot;What beyond example-based tests?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Property-based&lt;/b&gt; tests: generate random event sequences and assert the invariants that must always hold — pay never negative, the in-progress count never below zero — catching combinations no hand-written table would think of.">属性</span> · <span class="hint" data-title="影子" data-tip="&lt;i&gt;&quot;How do you validate a new version in production?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Shadow computation&lt;/b&gt;: run the new version next to the old one on live traffic, diff the outputs, and only cut over when the diff goes quiet. For payment code that diff is the real safety net.">影子</span></li>
+<li><span class="hint" data-title="可观测性 — 大题" data-tip="&lt;i&gt;&quot;How do you know this service is healthy? What do you monitor and alert on?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 基础信号 → 业务不变量&lt;br&gt;&lt;br&gt;收尾: &lt;b&gt;&quot;Infrastructure alerts tell me the service is up; invariant alerts tell me the numbers are right — for money, the second kind matters more.&quot;&lt;/b&gt;">可观测性</span>: <span class="hint" data-title="基础信号" data-tip="&lt;i&gt;&quot;What do you monitor?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The standard set: request rate, error rate, latency percentiles per downstream, depth of the repair queue, and the &lt;b&gt;age of the oldest unprocessed event&lt;/b&gt; — that last one tells me whether the pipeline is falling behind.">基础信号</span> · <span class="hint" data-title="业务不变量" data-tip="&lt;i&gt;&quot;What alerts actually matter for payment code?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Business invariants: the in-progress order count going &lt;b&gt;negative&lt;/b&gt;; a day's pay jumping far outside a dasher's historical range; the repair queue's oldest item approaching the &lt;b&gt;payout deadline&lt;/b&gt;; and any mismatch between what we computed and what we actually paid.">业务不变量</span></li>
+<li><span class="hint" data-title="配置变更 — 大题" data-tip="&lt;i&gt;&quot;The pay rate changes, or the peak window moves — how do you handle that for days in flight?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 生效日期 → 重算安全 → 显式回填">配置变更</span>: <span class="hint" data-title="生效日期" data-tip="&lt;i&gt;&quot;The pay rate changes — how do you store that?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Never as one mutable value — config gets an &lt;b&gt;effective date&lt;/b&gt;. The rate table says thirty cents until June first, thirty-five after. Rates are appended, never edited in place.">生效日期</span> · <span class="hint" data-title="重算安全" data-tip="&lt;i&gt;&quot;Does a rate change break recomputing old days?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;No — every computation picks the rate by &lt;b&gt;the timestamp of the minutes being paid&lt;/b&gt;, not by when the computation runs. Recomputing an old day still gives the old answer, so same-inputs-same-result survives. A mid-day change just means the day has two rate segments — same splitting logic as a peak window.">重算安全</span> · <span class="hint" data-title="显式回填" data-tip="&lt;i&gt;&quot;Does changing config trigger recomputation?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Never silently. If the business wants a retroactive change, that's an explicit &lt;b&gt;backfill job&lt;/b&gt; with its own approval — not a side effect of editing a config file. Settled days don't move on their own.">显式回填</span></li>
+<li><span class="hint" data-title="批量算错 — 大题" data-tip="&lt;i&gt;&quot;A bug shipped and miscomputed a whole week of pay for every dasher. Walk me through the fix.&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 止血 → 重放差分 → 多退少补">批量算错</span>: <span class="hint" data-title="止血" data-tip="&lt;i&gt;&quot;A bad release miscomputed pay — first move?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Stop the bleeding&lt;/b&gt;: freeze payouts from the bad code path, fix the bug. Nothing else matters until wrong money stops moving.">止血</span> · <span class="hint" data-title="重放差分" data-tip="&lt;i&gt;&quot;How do you find who was affected?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Replay the whole week through the corrected function — it's &lt;b&gt;pure&lt;/b&gt;, so recomputing is safe and cheap — and &lt;b&gt;diff every dasher-day&lt;/b&gt; against what was actually paid. The diff is the complete, provable list of who was wronged and by how much.">重放差分</span> · <span class="hint" data-title="多退少补" data-tip="&lt;i&gt;&quot;How do you correct the money?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Underpaid dashers get automatic &lt;b&gt;top-ups&lt;/b&gt;, each a new payment instruction with its own idempotency key. Overpaid is a &lt;b&gt;business decision, not an engineering one&lt;/b&gt; — clawing money back from workers has legal and trust costs, so I surface the total and let policy decide; often the answer is eating the loss. The whole correction runs through the ledger and audit log.">多退少补</span></li>
+<li><span class="hint" data-title="新增状态 — 大题" data-tip="&lt;i&gt;&quot;Next quarter we add a new event status — say RETURNED. What happens to your service?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 默认抛 → 单单隔离 → 部署契约&lt;br&gt;&lt;br&gt;原则句: &lt;b&gt;&quot;A new status is never silently interpreted — either I know its pay semantics, or that order waits.&quot;&lt;/b&gt;">新增状态</span>: <span class="hint" data-title="默认抛" data-tip="&lt;i&gt;&quot;An unknown status arrives — why does your code throw?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Because guessing what a new status means for pay could silently mis-pay someone. On a payment path, refusing to interpret the unknown is the right default — loud beats wrong.">默认抛</span> · <span class="hint" data-title="单单隔离" data-tip="&lt;i&gt;&quot;Won't throwing take the pipeline down when a new status rolls out?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;It would — so the production version narrows the blast radius: an unknown status &lt;b&gt;quarantines that one order&lt;/b&gt;, routing it to the repair queue the same way corrupt data goes, while every other order keeps settling.">单单隔离</span> · <span class="hint" data-title="部署契约" data-tip="&lt;i&gt;&quot;How do you roll out a new status safely?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;New statuses ship behind a &lt;b&gt;schema version&lt;/b&gt;; consumers declare which versions they support; and the rollout order is &lt;b&gt;consumers first, producers second&lt;/b&gt; — nobody emits a status the fleet can't yet read.">部署契约</span></li>
+</ul>
+<hr>
+<ul>
+<li>练习环境: <code>08a-dasher-pay/</code> — Practice1/2/3 答题纸 · DasherPayTest 判卷 · Solution 答案 · <code>javac *.java &amp;&amp; java DasherPayTest</code></li>
+<li>主卡 [[_08-DoorDash-Code-Craft-Round1]] · 历史讨论与长版内容: git history</li>
+</ul>
+
+  </section>
+  <section id="note-08b-bootstrap-api-study" class="story" data-pane="general">
+    <h1>Bootstrap API — 复习卡</h1>
+    
+    
+    <blockquote>
+<p>题: App 冷启动一次调用拿齐首屏数据 —— 聚合三个内部服务（Consumer / Payments / Address）。失败 = 非 200 状态码，不抛异常。算法量≈0，分数在 clarify 与生产 judgment。</p>
+</blockquote>
+<h2 id="note-08b-bootstrap-api-study-h-p1">P1 · 聚合端点</h2>
+<p><strong>Clarify</strong></p>
+<ul>
+<li><strong>失败形态</strong>: <span class="hint" data-title="失败形态 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;When a downstream fails, what do I see — an exception, or an error status?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;Then try/catch won't help — every response gets its status checked.&quot;&lt;br&gt;・记: // failures = non-200 status, nothing throws">exception, or error status?</span></li>
+<li><strong>重试策略</strong>: <span class="hint" data-title="重试策略 — 声明假设（照念）" data-tip="&lt;b&gt;&quot;This sits on the app's cold-start path, so I'd keep retries tight: three attempts, about a hundred milliseconds apart with jitter, and a hard one-second budget for the whole call — then degrade instead of blocking. Fair?&quot;&lt;/b&gt;&lt;br&gt;・为什么不是指数退避: 1s/2s/4s 是后台任务的礼貌，用户正盯着开屏转圈&lt;br&gt;・记: // retry: 3x, ~100ms+jitter, ~1s total budget -&amp;gt; degrade">冷启动版三参数 — fair?</span></li>
+<li><strong>键的来源</strong>: <span class="hint" data-title="键的来源 — 本题头号数据坑" data-tip="・问: &lt;b&gt;&quot;Payments and Address take a consumerId — is that my userId, or does it come from the Consumer response?&quot;&lt;/b&gt;&lt;br&gt;・答案: 来自 Consumer 响应的 consumer_id 字段，传 userId 会得到 404&lt;br&gt;・记: // consumerId = consumer response field, NOT userId">consumerId = userId?</span></li>
+<li><strong>硬依赖</strong>: <span class="hint" data-title="硬依赖 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;If ConsumerService stays down after retries, what do I return?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;No consumer, no key to call anything else with — that one's fatal.&quot;&lt;br&gt;・记: // consumer down -&amp;gt; 503, skip the other two entirely">Consumer down → fail all?</span></li>
+<li><strong>软依赖</strong>: <span class="hint" data-title="软依赖 — 本题最重的分" data-tip="・问: &lt;b&gt;&quot;If Payments or Address fails after retries — fail the whole request, or degrade?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;First screen with a missing corner beats no first screen.&quot;&lt;br&gt;・记: // soft dep down -&amp;gt; field null, status stays 200, partial:true">Payments/Address down → degrade?</span></li>
+<li><strong>响应形状</strong>: <span class="hint" data-title="响应形状" data-tip="・问: &lt;b&gt;&quot;What shape do you want back — and how do I signal a partial result?&quot;&lt;/b&gt;&lt;br&gt;・记: // {status, consumer, payments, address, partial}">composite + partial 怎么长</span></li>
+<li><strong>并行</strong>: <span class="hint" data-title="并行 — 问句 + 钩子" data-tip="・问: &lt;b&gt;&quot;Once I have the consumer id, can Payments and Address run in parallel?&quot;&lt;/b&gt;&lt;br&gt;・钩: &quot;They depend on the consumer id, not on each other — I'd pay the slower one's latency, not the sum.&quot;&lt;br&gt;・记: // payments + address parallel after consumer">two dependent calls in parallel?</span></li>
+<li><strong>非法输入</strong>: <span class="hint" data-title="非法输入" data-tip="・问: &lt;b&gt;&quot;Null or blank userId?&quot;&lt;/b&gt;&lt;br&gt;・记: // null/blank userId -&amp;gt; IllegalArgumentException (caller bug = IAE)">null / blank userId?</span></li>
+<li><strong>可重试性</strong>: <span class="hint" data-title="可重试性 — 声明假设（照念）" data-tip="&lt;b&gt;&quot;I'll only retry retryable failures — five-hundreds. A 404 means the key is wrong; retrying can't fix that. Fair?&quot;&lt;/b&gt;&lt;br&gt;・记: // retry 5xx only; 404 = wrong key, don't retry">retry 404 too?</span></li>
+</ul>
+<p><strong>Verify</strong></p>
+<ul>
+<li><strong>Base</strong>: <span class="hint" data-title="全链路成功" data-tip="三个服务全部 200&lt;br&gt;⇒ composite 五键齐全，partial = false&lt;br&gt;学名: &lt;b&gt;full composite (happy path)&lt;/b&gt;">全链路成功</span> · <span class="hint" data-title="软依赖降级" data-tip="Payments 持续失败，其余正常&lt;br&gt;⇒ payments = null，address 照常，status 200，partial = true&lt;br&gt;学名: &lt;b&gt;partial degradation&lt;/b&gt;">软依赖降级</span> · <span class="hint" data-title="抖动恢复" data-tip="Payments 第一次失败、第二次成功&lt;br&gt;⇒ 重试救回：字段齐全，该服务被调 2 次，partial = false&lt;br&gt;学名: &lt;b&gt;transient failure recovered by retry&lt;/b&gt;">抖动恢复</span></li>
+<li><strong>Corner</strong>: <span class="hint" data-title="硬依赖失败" data-tip="Consumer 持续失败&lt;br&gt;⇒ {status: 503, error}，且 Payments/Address &lt;b&gt;调用次数 = 0&lt;/b&gt;&lt;br&gt;学名: &lt;b&gt;hard-dependency failure (dependents never called)&lt;/b&gt;">硬依赖失败</span> · <span class="hint" data-title="双软失败" data-tip="Payments 与 Address 双双失败&lt;br&gt;⇒ consumer 在、双字段 null、status 200、partial = true&lt;br&gt;学名: &lt;b&gt;double soft-dependency failure&lt;/b&gt;">双软失败</span> · <span class="hint" data-title="重试封顶" data-tip="某服务永远失败&lt;br&gt;⇒ 调用次数 = 上限（如 3），不无限重试&lt;br&gt;学名: &lt;b&gt;retry cap&lt;/b&gt;">重试封顶</span> · <span class="hint" data-title="非法输入" data-tip="userId = null / blank&lt;br&gt;⇒ &lt;b&gt;IllegalArgumentException&lt;/b&gt;&lt;br&gt;学名: &lt;b&gt;invalid input&lt;/b&gt;">非法输入</span></li>
+</ul>
+<h2 id="note-08b-bootstrap-api-study-h-p2-production-follow-up">P2 · Production Follow-up</h2>
+<p>大题照行串联（行首悬停 = 原题 + 串联序），小题直击小卡。</p>
+<ul>
+<li><span class="hint" data-title="八种失败组合 🔥 — 大题" data-tip="&lt;i&gt;&quot;Three services, each up or down — eight combinations. What does your endpoint return for each?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 三类压缩 → 逐类形状">八种失败组合 🔥</span>: <span class="hint" data-title="三类压缩" data-tip="&lt;i&gt;&quot;Eight combinations — what's the pattern?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;They collapse into &lt;b&gt;three classes&lt;/b&gt;. Consumer down: nothing else can even be called — all four of those combinations return 503. Consumer up: the other two independently show up as data or null — four shapes of a 200. And partial is simply true whenever any field is null. Eight combinations, &lt;b&gt;three behaviors&lt;/b&gt;: hard fail, full success, degraded success.">三类压缩</span> · <span class="hint" data-title="逐类形状" data-tip="&lt;i&gt;&quot;Walk them concretely.&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Consumer down — 503, dependents never called, covers 4 of the 8. Consumer up, both others up — full composite, partial false. Consumer up, Payments down — payments null, partial true. Consumer up, Address down — address null, partial true. Consumer up, both down — both null, partial true. Every consumer-up shape is a &lt;b&gt;200&lt;/b&gt;.">逐类形状</span></li>
+<li><span class="hint" data-title="降级怎么告知 — 大题" data-tip="&lt;i&gt;&quot;How does the caller know the response is degraded?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 200+partial 派 → 207 派 → 客户端契约">降级怎么告知</span>: <span class="hint" data-title="200+partial 派" data-tip="&lt;i&gt;&quot;How do you signal a partial result?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;My default: HTTP &lt;b&gt;200 with an explicit partial:true flag&lt;/b&gt;, failed fields as null. One uniform envelope, universally parseable; the app renders what it has and knows to backfill the rest.">200+partial 派</span> · <span class="hint" data-title="207 派" data-tip="&lt;i&gt;&quot;Why not HTTP 207 Multi-Status?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;207 is the other camp — a per-part status for each sub-resource, originally from WebDAV. More precise, but plenty of mobile clients and middleboxes treat anything non-200 as an error. A boring 200 with a JSON flag survives the real world better; I'd pick it and document it.">207 派</span> · <span class="hint" data-title="客户端契约" data-tip="&lt;i&gt;&quot;What's the client's contract on a partial response?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Render what's there, placeholder what's missing, and re-fetch the missing pieces lazily — &lt;b&gt;never block first paint&lt;/b&gt;. And the contract states which fields are guaranteed (consumer) versus nullable (payments, address).">客户端契约</span></li>
+<li><span class="hint" data-title="重试之外的弹性 — 大题" data-tip="&lt;i&gt;&quot;Retries aside — how do you keep this resilient?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 熔断 → 舱壁 → 兜底值">重试之外的弹性</span>: <span class="hint" data-title="熔断" data-tip="&lt;i&gt;&quot;What if a downstream keeps failing?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;circuit breaker&lt;/b&gt; — closed, open, half-open probe. After enough consecutive failures I stop calling it for a cooldown. On a cold-start path that converts a slow death into instant clean degradation: the field goes null immediately instead of burning the latency budget on a dead service.">熔断</span> · <span class="hint" data-title="舱壁" data-tip="&lt;i&gt;&quot;One slow downstream — can it take the others down?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Not if each downstream gets its own small connection and thread pool — the &lt;b&gt;bulkhead&lt;/b&gt; pattern, like ship compartments. One hanging service exhausts its own compartment and nothing else; the other calls proceed untouched.">舱壁</span> · <span class="hint" data-title="兜底值" data-tip="&lt;i&gt;&quot;Is null the best you can do for a failed field?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;For display data, no — &lt;b&gt;last-known-good from cache&lt;/b&gt; beats an empty corner: the address rarely changes day to day. Serve it clearly marked stale. Display data only — anything that authorizes an action must be fresh.">兜底值</span></li>
+<li><span class="hint" data-title="并行与延迟 — 大题" data-tip="&lt;i&gt;&quot;You parallelized the two dependent calls — defend it.&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 专属线程池 → 预算分配">并行与延迟</span>: <span class="hint" data-title="专属线程池" data-tip="&lt;i&gt;&quot;Why pass your own executor instead of the common pool?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The common pool is &lt;b&gt;shared JVM-wide&lt;/b&gt;, and my tasks are blocking I/O — network calls plus retries. Blocking tasks parked in a shared pool starve everyone else's work. So production gets a &lt;b&gt;dedicated pool sized for I/O&lt;/b&gt;, and tests inject a same-thread executor so the flow becomes deterministic.">专属线程池</span> · <span class="hint" data-title="预算分配" data-tip="&lt;i&gt;&quot;How do you split a one-second budget across retries and two parallel calls?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Consumer gets the first slice — it's serial and everything depends on it, say up to 400 milliseconds including retries. The rest covers Payments and Address &lt;b&gt;in parallel&lt;/b&gt;, so I pay the slower one, not the sum. Any call about to outlive the budget is cut, and its field degrades to null.">预算分配</span></li>
+<li><span class="hint" data-title="可观测性 — 大题" data-tip="&lt;i&gt;&quot;How do you know this endpoint is healthy?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 每下游指标 → 告警">可观测性</span>: <span class="hint" data-title="每下游指标" data-tip="&lt;i&gt;&quot;What do you measure?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Per-downstream&lt;/b&gt;, not just overall: success rate, latency percentiles, retry counts, breaker state. Plus the endpoint's own p99 against the cold-start budget, and the &lt;b&gt;ratio of partial responses&lt;/b&gt; — a rising partial rate is the earliest smell of a quietly degrading dependency.">每下游指标</span> · <span class="hint" data-title="告警" data-tip="&lt;i&gt;&quot;What pages a human?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Sustained breaker-open on any downstream; the partial-rate crossing a threshold; p99 approaching the cold-start budget. A one-off blip retries away — what pages a human is &lt;b&gt;sustained&lt;/b&gt; degradation.">告警</span></li>
+<li><span class="hint" data-title="接口演进 — 大题" data-tip="&lt;i&gt;&quot;This composite will evolve — how do you keep it safe?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 版本化 → 加第四个服务">接口演进</span>: <span class="hint" data-title="版本化" data-tip="&lt;i&gt;&quot;How do you evolve the composite response?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;It carries a &lt;b&gt;schema version&lt;/b&gt;. Additive changes — new optional fields — are safe anytime; renames and removals wait for a major version, and old clients keep receiving the shape they declared.">版本化</span> · <span class="hint" data-title="加第四个服务" data-tip="&lt;i&gt;&quot;Product wants a fourth service in the bootstrap — say promotions. What changes?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Structurally almost nothing — that's the payoff of the safeCall pattern: one more wrapped call, one more field, &lt;b&gt;soft by default&lt;/b&gt;. The real question is whether it belongs on the cold-start path at all — every addition spends the same one-second budget, so the bar is &quot;needed for first paint&quot;, not &quot;nice to have&quot;.">加第四个服务</span></li>
+<li><span class="hint" data-title="测试 — 大题" data-tip="&lt;i&gt;&quot;How do you test this endpoint?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 组合矩阵 → 契约测试">测试</span>: <span class="hint" data-title="组合矩阵" data-tip="&lt;i&gt;&quot;How do you unit-test the failure handling?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Table-driven over the failure matrix&lt;/b&gt; — three services, eight combinations, one row each. Every row asserts the exact shape: status, which fields are null, the partial flag, and that dependents are &lt;b&gt;never called&lt;/b&gt; when Consumer is down.">组合矩阵</span> · <span class="hint" data-title="契约测试" data-tip="&lt;i&gt;&quot;What breaks when an upstream silently renames a field?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;contract test&lt;/b&gt; should, not production. The fields I extract — consumer_id above all — are pinned by tests against each downstream's mock, so a silent rename fails a build instead of nulling out live traffic.">契约测试</span></li>
+</ul>
+<hr>
+<ul>
+<li>练习环境: <code>08b-bootstrap-api/</code> — Practice 答题纸 · BootstrapTest 判卷 · Solution 答案 · <code>javac *.java &amp;&amp; java BootstrapTest</code></li>
+<li>姊妹卡 [[08a-Dasher-Pay-Study]] · 主卡 [[_08-DoorDash-Code-Craft-Round1]] · 长版讨论: git history</li>
+</ul>
+
+  </section>
+  <section id="note-08c-round-robin-study" class="story" data-pane="general">
+    <h1>Round Robin Debugging — 复习卡（onsite 轮）</h1>
+    
+    
+    <blockquote>
+<p>题: 给 ~200 行别人写的 round-robin 分单器（pick / add / remove），埋 5–8 个雷。Task 1 修雷（自己写测试）；Task 2 必问: 重设计为一致性哈希。没有 clarify 环节 —— 用 30 秒意图确认替代。</p>
+</blockquote>
+<h2 id="note-08c-round-robin-study-h-p1">P1 · 修雷</h2>
+<ul>
+<li><strong>开场 30 秒</strong>: <span class="hint" data-title="开场 30 秒（照念）" data-tip="&lt;b&gt;&quot;Let me confirm the intent: round-robin means every dasher gets picked in turn, evenly, starting from the first — and add or remove can happen between picks. I'll read the whole file first, then reproduce each bug before fixing it.&quot;&lt;/b&gt;&lt;br&gt;一句话干三件事: 钉死预期行为 · 宣告工作纪律 · 留出被纠正的口子">确认意图 + 宣告纪律</span></li>
+<li><strong>纪律</strong>: <span class="hint" data-title="三条铁律" data-tip="① &lt;b&gt;通读全文件再动手&lt;/b&gt; — 最常见失败模式就是边读边改；很多雷只有看到 pick/add/remove 的交互才成立&lt;br&gt;② &lt;b&gt;先复现再修&lt;/b&gt; — 每个雷用最小用例复现、报出病名，然后才动手；&quot;没证实就修&quot;即使修对也扣分&lt;br&gt;③ &lt;b&gt;嘴与代码一致&lt;/b&gt; — 全程出声，且描述的必须是代码真正做的事（说 swap-with-last 就得真是 O(1) swap）">三条铁律</span></li>
+<li><strong>雷池</strong>: <span class="hint" data-title="六类已知埋雷（看到症状报病名）" data-tip="・&lt;b&gt;构造器字段未初始化&lt;/b&gt; → 启动即 NPE，修掉它其他症状才现形&lt;br&gt;・&lt;b&gt;pick 先进后用&lt;/b&gt; → 首选不是 0 号 / wrap 后跳过 0 号&lt;br&gt;・&lt;b&gt;模数差一&lt;/b&gt;（% size-1）→ 末位节点永远饿死 + 单节点除零&lt;br&gt;・&lt;b&gt;remove 尾交换不更新被换者索引&lt;/b&gt; → 之后删被换者会删错人、幽灵成员留场&lt;br&gt;・&lt;b&gt;不可变集合初始化后被改&lt;/b&gt;（Collections.emptyMap 再 put）→ UnsupportedOperationException&lt;br&gt;・&lt;b&gt;随机源在循环内播种&lt;/b&gt; → 分布偏斜（DasherMap 随机变体）">六类已知埋雷</span></li>
+</ul>
+<p><strong>Verify（自己写的测试就是评分项）</strong></p>
+<ul>
+<li><strong>Base</strong>: <span class="hint" data-title="轮转序" data-tip="[A,B,C] 连续 pick 六次&lt;br&gt;⇒ 恰好 ABCABC（从第一个开始，逐个轮转）&lt;br&gt;学名: &lt;b&gt;rotation order&lt;/b&gt;">轮转序</span> · <span class="hint" data-title="公平性" data-tip="3 个 dasher，pick 300 次&lt;br&gt;⇒ 每人恰好 100 次&lt;br&gt;学名: &lt;b&gt;fairness over many picks&lt;/b&gt;">公平性</span></li>
+<li><strong>Corner</strong>: <span class="hint" data-title="单节点" data-tip="只有 [A]，pick 两次&lt;br&gt;⇒ A, A（抓 % (size-1) 的除零）&lt;br&gt;学名: &lt;b&gt;single-member rotation&lt;/b&gt;">单节点</span> · <span class="hint" data-title="重复注册" data-tip="同一 id add 两次&lt;br&gt;⇒ &lt;b&gt;IllegalArgumentException&lt;/b&gt;（索引表必须一致）&lt;br&gt;学名: &lt;b&gt;duplicate registration&lt;/b&gt;">重复注册</span> · <span class="hint" data-title="删被换者" data-tip="[A,B,C] 删 A（尾巴 C 被换进 A 的位置），再删 C&lt;br&gt;⇒ 只剩 B，之后 pick 全是 B（抓&quot;被换者索引没更新&quot;）&lt;br&gt;学名: &lt;b&gt;removing the moved entry&lt;/b&gt;">删被换者</span> · <span class="hint" data-title="删尾自身" data-tip="[A,B] 直接删尾巴 B（自换分支）&lt;br&gt;⇒ pick 全是 A&lt;br&gt;学名: &lt;b&gt;removing the tail itself&lt;/b&gt;">删尾自身</span> · <span class="hint" data-title="空 pick" data-tip="成员删光后 pick&lt;br&gt;⇒ &lt;b&gt;IllegalStateException&lt;/b&gt;&lt;br&gt;学名: &lt;b&gt;pick on empty picker&lt;/b&gt;">空 pick</span></li>
+</ul>
+<h2 id="note-08c-round-robin-study-h-p2-task-2">P2 · Task 2 一致性哈希（必问的重设计）</h2>
+<ul>
+<li><span class="hint" data-title="重设计 — 大题" data-tip="&lt;i&gt;&quot;Round robin reshuffles everything when membership changes — redesign pick() with consistent hashing.&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 环 → 虚拟节点 → 哈希选择&lt;br&gt;&lt;br&gt;目标: 15 行、5 分钟内默写；没时间上虚拟节点就口头讲 trade-off，面试官明确接受">重设计大题</span>: <span class="hint" data-title="环" data-tip="&lt;i&gt;&quot;What's the core structure?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;sorted map from hash position to node&lt;/b&gt; — that's the ring. To pick: hash the key, take the first entry at or after it, and &lt;b&gt;wrap to the first entry&lt;/b&gt; past the end. Adding a node inserts its positions; removing deletes them — so only that node's arc of keys moves, about one Nth of traffic.">环</span> · <span class="hint" data-title="虚拟节点" data-tip="&lt;i&gt;&quot;Why virtual nodes?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;One position per node makes the arcs wildly uneven. Give each node a hundred positions and the arcs average out — in my practice run the split went from one node owning everything to roughly a third each. More virtual nodes: smoother, at the cost of ring size and slower membership changes.">虚拟节点</span> · <span class="hint" data-title="哈希选择" data-tip="&lt;i&gt;&quot;Which hash function — can you just use hashCode?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;No — &lt;b&gt;String.hashCode has no avalanche&lt;/b&gt;: similar inputs stay neighbors, the node positions cluster, and the ring collapses onto one node. I watched it send 1000 of 1000 keys to a single target. Use a real mixing hash — &lt;b&gt;MD5 via the JDK's UUID helper&lt;/b&gt; is the classic one-liner.">哈希选择</span></li>
+</ul>
+<h2 id="note-08c-round-robin-study-h-p3-production-follow-up">P3 · Production Follow-up</h2>
+<p>大题照行串联（行首悬停 = 原题 + 串联序），小题直击小卡。</p>
+<ul>
+<li><span class="hint" data-title="加删节点 — 大题" data-tip="&lt;i&gt;&quot;What happens when a dasher node is added or removed?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: RR 全错位 → CH 只动 1/N">加删节点</span>: <span class="hint" data-title="RR 全错位" data-tip="&lt;i&gt;&quot;What does a membership change do to round robin?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;It shifts &lt;b&gt;every subsequent assignment&lt;/b&gt; — everyone's next pick lands somewhere new, all sessions scramble at once. That's the disease consistent hashing exists to cure.">RR 全错位</span> · <span class="hint" data-title="CH 只动 1/N" data-tip="&lt;i&gt;&quot;And under consistent hashing?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Only the leaving node's arc re-routes — about &lt;b&gt;one Nth of traffic&lt;/b&gt;; every other key stays exactly where it was. I verified it in practice: removing one of three nodes moved precisely its own keys and nothing else.">CH 只动 1/N</span></li>
+<li><span class="hint" data-title="压方差 — 大题" data-tip="&lt;i&gt;&quot;How do you bound the variance across nodes?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 虚拟节点 → Rendezvous 哈希">压方差</span>: <span class="hint" data-title="虚拟节点" data-tip="&lt;i&gt;&quot;First tool for evening out the load?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A hundred-plus &lt;b&gt;virtual positions per node&lt;/b&gt; — each node's share becomes the sum of many small arcs, and the law of large numbers flattens the variance. Tune the count: more is smoother, but the ring grows and membership changes slow down.">虚拟节点</span> · <span class="hint" data-title="Rendezvous 哈希" data-tip="&lt;i&gt;&quot;Is there an alternative to the ring?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Rendezvous — highest-random-weight — hashing&lt;/b&gt;: for each key, score every node with hash(key, node) and pick the highest score. No ring, no virtual nodes, naturally uniform, same minimal-disruption property — at &lt;b&gt;O(N) per pick&lt;/b&gt;, perfectly fine for small clusters.">Rendezvous 哈希</span></li>
+<li><span class="hint" data-title="分布式部署 — 大题" data-tip="&lt;i&gt;&quot;How would you deploy this picker as a real distributed system?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 成员共识 → gossip 广播 → 粘性会话">分布式部署</span>: <span class="hint" data-title="成员共识" data-tip="&lt;i&gt;&quot;Where does the ring membership live?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;The ring becomes &lt;b&gt;shared state&lt;/b&gt;, so membership goes through a consensus store — &lt;b&gt;Zookeeper or etcd&lt;/b&gt;: one authoritative node list, watched by every picker instance, so no two instances disagree about who's in.">成员共识</span> · <span class="hint" data-title="gossip 广播" data-tip="&lt;i&gt;&quot;How do ring updates reach every instance?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;By &lt;b&gt;gossip&lt;/b&gt; — each instance passes what it knows to a few random peers per round, and an update reaches the whole fleet in logarithmic time, with no broadcast storm and no single point of failure.">gossip 广播</span> · <span class="hint" data-title="粘性会话" data-tip="&lt;i&gt;&quot;Why sticky sessions here?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A customer's follow-up orders should keep landing on the &lt;b&gt;same node&lt;/b&gt; — and consistent hashing gives you that for free, as long as the hash key is &lt;b&gt;the customer, not the order&lt;/b&gt;. Key choice is the design decision.">粘性会话</span></li>
+<li><span class="hint" data-title="并发 — 大题" data-tip="&lt;i&gt;&quot;This picker is shared across threads — where does synchronization go?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 锁粒度 → 持锁禁外调">并发</span>: <span class="hint" data-title="锁粒度" data-tip="&lt;i&gt;&quot;Whole synchronized methods, or narrower?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Narrow blocks&lt;/b&gt; — hold the lock only around the shared-structure mutation, not the surrounding work, and be able to name the invariant each block protects. Whole-method synchronized is the lazy default that serializes everything.">锁粒度</span> · <span class="hint" data-title="持锁禁外调" data-tip="&lt;i&gt;&quot;What's the hard rule about locks here?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Never hold the shared lock while calling an external service.&lt;/b&gt; One downstream timeout inside the lock freezes every operation on the picker — that's the exact mechanism by which a slow dependency becomes a full outage.">持锁禁外调</span></li>
+<li><span class="hint" data-title="生产测试 — 大题" data-tip="&lt;i&gt;&quot;How do you test this in production code?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;串联作答，按行内顺序: 每雷一测 → 随机序列 → 分布契约">生产测试</span>: <span class="hint" data-title="每雷一测" data-tip="&lt;i&gt;&quot;What happens to the bugs you fixed?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;Every bug gets a &lt;b&gt;pinned table-driven test&lt;/b&gt; that reproduces it — the regression can never come back unnoticed. The test list doubles as the incident record.">每雷一测</span> · <span class="hint" data-title="随机序列" data-tip="&lt;i&gt;&quot;What beyond example-based tests?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Property tests&lt;/b&gt; over random add/remove/pick sequences, asserting the invariants — picks only ever return live members, the index map and the list never disagree — catching interleavings no hand-written case covers.">随机序列</span> · <span class="hint" data-title="分布契约" data-tip="&lt;i&gt;&quot;How do you catch a broken hash or a skipping cursor?&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;A &lt;b&gt;distribution contract test&lt;/b&gt;: over enough picks, every member's share stays within tolerance of even. That single test catches a collapsed ring, a starved tail node, and a skipped index alike.">分布契约</span></li>
+</ul>
+<hr>
+<ul>
+<li>练习环境: <code>08c-round-robin/</code> — RoundRobinPicker 埋雷版 · ConsistentPicker 骨架 · <code>javac *.java &amp;&amp; java DebugTest</code></li>
+<li>姊妹卡 [[08a-Dasher-Pay-Study]] · [[08b-Bootstrap-API-Study]] · 主卡 [[_08-DoorDash-Code-Craft-Round1]]</li>
+</ul>
+
+  </section></div>
+    <div class="pane hidden" data-pane="stars">
+  <section id="story-01-optimization-120x" class="story" data-pane="stars">
+    <h1>Optimization — Runtime & Memory (120×, 20×, 75%)</h1>
+    <div class="theme-cn"><strong>主题：</strong>通过多轮系统性优化——架构重构(120×)、查询策略(20×)、内存治理(75%↓)——将定位系统从prototype推向production，交付给Waymo、Maps、Wing</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>High-precision geolocation system</li>
+<li>System was functionally correct as a prototype, but not production-ready</li>
+<li>Runtime, memory, and auxiliary workflow performance all far below production bar</li>
+<li>Internal partners (Waymo, Maps, Wing) needed a production-quality system</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Lead performance optimization across multiple dimensions to bring the system to production readiness</li>
+<li>Output must remain bit-for-bit identical — zero tolerance for any change in positioning results</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Runtime — Architecture Refactor (40×):</strong> 80% runtime was matrix computation → analyzed and drastically reduced matrix dimensions without affecting output → 40× speedup alone</li>
+<li><strong>Runtime — DB Query Optimization (3× → total 120×):</strong> optimized query strategy to avoid hitting unnecessary shards → additional 3×, bringing total to 120×</li>
+<li><strong>Auxiliary — Parallel Processing (20×):</strong> analytics tool wasn&#39;t the main bottleneck, but noticed it could be parallelized → 20× speedup; prevented it from becoming a bottleneck when later processing Waymo&#39;s large-scale datasets</li>
+<li><strong>Memory — Customer-Driven (75%):</strong> StreetView team&#39;s customer reported OOM on large datasets — proactively optimized system architecture, removed unnecessary heavy allocations → 75% reduction, allowing customers to run in smaller containers</li>
+<li>Each optimization validated end-to-end — output bit-for-bit identical</li>
+<li>Shared profiling methodology with team → adopted for other components</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Main pipeline: 120× faster (40× architecture + 3× DB)</li>
+<li>Auxiliary workflows: 20× faster, prevented future bottleneck at Waymo scale</li>
+<li>Memory: 75% reduction, unblocked StreetView customer, saved compute resources</li>
+<li>Combined: system went from prototype to production — delivered to Waymo, Google Maps, Wing</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Production readiness requires optimizing across multiple dimensions, not just the obvious bottleneck</li>
+<li>Proactive optimization (memory issue) is as valuable as reactive — didn&#39;t wait for it to become a blocker for more partners</li>
+</ul>
+
+  </section>
+  <section id="story-02-backward-processing" class="story" data-pane="stars">
+    <h1>Backward Processing — P99 Error Fix</h1>
+    <div class="theme-cn"><strong>主题：</strong>主动识别了长期未解决的P99尾部误差问题(20m+)，通过设计双向处理算法将P99降至1米以内，成为production标准组件，并直接促使Waymo主动联系替换其开源工具。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>High-precision geolocation system — P50 accuracy excellent (cm-level), but P99 had extreme failures: 20+ meters</li>
+<li>Problem existed long-term, no one had systematically addressed it</li>
+<li>Identified this as a critical gap and took ownership proactively</li>
+<li>Core value of system is precision — P99 at 20m is unacceptable for production partners</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Find root cause of P99 long-tail failures and design a generalizable solution</li>
+<li>Cannot degrade P50/P90 accuracy in the process</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Phase 1 — Diagnosis:</strong> Visualized all extreme-error cases on map (not aggregated metrics) → failures clustered around obstructed-signal areas (overpasses, urban canyons). Deeper analysis: root cause wasn&#39;t the obstruction itself, but corrupted state propagating forward through subsequent time steps.</li>
+<li><strong>Phase 2 — First Solution + Trade-off:</strong> Designed detection + mode switch: when signal quality drops significantly, switch from stateful tracking mode to stateless single-shot mode. Fixed most extreme cases, but introduced risk: false triggers would unnecessarily drop accuracy.</li>
+<li><strong>Phase 3 — Backward Processing (core innovation):</strong> Insight: forward-only processing forces a hard choice. Designed bidirectional processing: run forward pass, then backward pass, fuse both results. Backward pass uses later clean data to refine earlier uncertain moments → eliminates the trade-off.</li>
+<li>End-to-end validation: P99 error from 20+ meters down to sub-1 meter</li>
+<li>Backward processing integrated as standard component in production pipeline</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>P99: 20+ meters → sub-1 meter</li>
+<li>Backward processing became standard production component</li>
+<li>Waymo proactively reached out to replace the industry-standard open-source baseline with our system</li>
+<li>Directly drove customer expansion for the product</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Surface symptom (overpass failures) and root cause (error propagation) can be completely different</li>
+<li>When a forward-only approach has a fundamental trade-off, rethinking information flow direction itself can break the constraint</li>
+</ul>
+
+  </section>
+  <section id="story-03-ai-agent-skill" class="story" data-pane="stars">
+    <h1>AI Agent Skill — Golden Test Automation</h1>
+    <div class="theme-cn"><strong>主题：</strong>在20%时间里利用Agent Skills将团队高频痛点（golden test更新，每次30分钟+）自动化为一句话触发的智能工作流，解决了之前Python脚本无法自适应、难以被记住的根本缺陷，成为团队标准工具。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>The positioning system has a golden test: before each commit, runs the full pipeline on real data — any precision change beyond 1nm triggers failure</li>
+<li>As customers grew (Waymo, Wing, StreetView), test cases kept expanding — golden file updates became a high-frequency pain point</li>
+<li>Triggered multiple times per week, hit almost every team member — 30+ min of repetitive manual work each time</li>
+<li>Previous Python script had two fundamental flaws: couldn&#39;t auto-adapt to newly added test cases; team members kept forgetting it existed</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Fully eliminate the golden file update inefficiency</li>
+<li>Solution must be easy for everyone on the team — no dependency on &quot;remembering the script name&quot;</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Google internally launched new AI Agent (Gemini Coder) supporting Agent Skills — evaluated during 20% time</li>
+<li>Why Agent Skill beats a script: natural language invocation → solves &quot;can&#39;t find/remember&quot; problem; LLM handles cases the script can&#39;t cover → solves &quot;can&#39;t auto-adapt&quot; problem</li>
+<li>Built a dedicated SKILL: one sentence to trigger → auto-runs script to update all golden files → auto-runs tests to verify → if new test cases detected, auto-upgrades script to adapt</li>
+<li>Completed from idea to working tool within 20% time</li>
+<li>Demoed to team at daily meeting</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>30+ min manual work → one sentence, Agent handles everything in background</li>
+<li>Became team&#39;s standard workflow</li>
+<li>Solved both fundamental flaws of the previous Python script</li>
+<li>Some team members started building their own Agent Skills for other workflows</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>When facing new tech concepts, the key isn&#39;t learning the concept itself — it&#39;s quickly identifying which real problem it can solve</li>
+<li>Good tooling isn&#39;t just technically functional — it must have zero adoption barrier</li>
+</ul>
+
+  </section>
+  <section id="story-04-satpvt-legacy-recovery" class="story" data-pane="stars">
+    <h1>Satpvt Service Bugfix — Legacy System Recovery</h1>
+    <div class="theme-cn"><strong>主题：</strong>主动接手前人离职后无人维护的卫星定位关键服务，在零背景下诊断出v3/v4数据格式不兼容问题，通过"零修正优于错误修正"的判断快速恢复生产，随后完成完整升级将精度从10m提升至±2m。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Upstream signal-correction service — critical input to the positioning pipeline</li>
+<li>Original owner left months earlier, work completely stalled, no one had context</li>
+<li>Service was silently producing ~10m errors, causing downstream positioning pipeline to fail</li>
+<li>Proactively took ownership with zero prior context</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Restore downstream production stability as quickly as possible</li>
+<li>Then properly fix the root cause</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Phase 1 — Diagnosis:</strong> No documentation, no handoff — reconstructed system behavior from only two old bug tickets and downstream error reports. Built minimal test setup to reproduce failure. Root cause: data source upgraded from v3 to v4 format, but parser still v3 → silently reading incorrect correction values.</li>
+<li><strong>Phase 2 — Emergency fix:</strong> Full parser upgrade would take weeks but production was blocked. Key judgment: applying wrong corrections was worse than applying no correction at all. Disabled v3 correction logic → system uses 0 as correction value. Not perfect, but strictly less harmful — downstream pipeline immediately unblocked.</li>
+<li><strong>Phase 3 — Full upgrade:</strong> Completed full parser upgrade to v4 standard. Accuracy improved from ~10m to ±2m.</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Emergency fix: downstream positioning pipeline unblocked immediately</li>
+<li>Full upgrade: accuracy from ~10m → ±2m (5× improvement)</li>
+<li>Inherited abandoned, broken service → restored and upgraded to production quality</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>When inheriting legacy systems under pressure, controlled progress beats waiting for perfect understanding</li>
+<li>The best emergency fix isn&#39;t always the most technically correct one — it&#39;s the one that causes the least harm while buying time</li>
+</ul>
+
+  </section>
+  <section id="story-05-waymo-evaluation" class="story" data-pane="stars">
+    <h1>Waymo Evaluation — One-Week Deadline</h1>
+    <div class="theme-cn"><strong>主题：</strong>在一周hard deadline内，作为唯一工程师主导了Waymo大规模评估，利用AI作为效率倍增器解决数据兼容和OOM问题，协调researcher并行优化，最终证明系统10×优于开源方案，促成Waymo合作。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Waymo reached out to evaluate our positioning engine against the industry-standard open-source baseline</li>
+<li>Highly strategic customer with very high expectations — needed proof on large-scale real data</li>
+<li>Hard deadline: one week before New Year holiday</li>
+<li>Sole engineer driving evaluation, with researcher(s) supporting on algorithm optimization</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Deliver convincing large-scale benchmark comparison within one week</li>
+<li>End-to-end scope: data format conversion → large-scale processing → algorithm optimization → result presentation</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Day 1:</strong> Waymo&#39;s raw data format incompatible → used AI Agent to build multiple format converters in &lt;1 hour. Data scale caused OOM → built chunking tool, forwarded chunk results to researchers immediately.</li>
+<li><strong>Day 2:</strong> Developed memory optimization (75% reduction) → full-scale parallel processing now possible. Ran in parallel with researchers developing optimization strategies.</li>
+<li><strong>Days 3–5:</strong> Combined infrastructure fixes with algorithm optimizations. Set up AI agents for multi-configuration test runs. Produced detailed slide deck with benchmark results.</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Delivered on time — complete benchmark before deadline</li>
+<li>Our engine 10× more accurate than the open-source baseline</li>
+<li>Waymo moved forward into active delivery and integration discussions</li>
+<li>One engineer + AI-augmented workflow accomplished what would normally require a much larger team</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Execution speed under extreme constraints comes from parallelizing workstreams, not working longer hours</li>
+<li>AI is most powerful as force multiplier on well-scoped, repetitive tasks — freeing engineer time for judgment-heavy work</li>
+</ul>
+
+  </section>
+  <section id="story-06-ci-monitor-infrastructure" class="story" data-pane="stars">
+    <h1>CI to Monitor Infrastructure</h1>
+    <div class="theme-cn"><strong>主题：</strong>主动建立了团队从零到一的质量保障体系——先设计CI精度门控拦截per-commit回归，再集成Google内部大规模监控平台实现1000+数据集的持续监控——两者现已成为团队强制发布流程。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Early stage: the positioning system only had crash-or-pass tests — no accuracy validation</li>
+<li>Accuracy regressions could silently slip in for weeks</li>
+<li>As scaling to production with partners, silent regressions hitting customers would destroy trust</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Build quality infrastructure that treats accuracy as a first-class metric</li>
+<li>Must evolve with the product</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Phase 1 — CI Accuracy Gate:</strong> Designed automated per-commit accuracy benchmarking against ground truth datasets, integrated into CI. Calibrated thresholds against historical variance so the gate catches genuine accuracy regressions without false-alarming on run-to-run noise. Commits that fail the gate are blocked from merging.</li>
+<li><strong>Phase 2 — Large-Scale Monitoring:</strong> CI golden tests insufficient at scale → integrated Google&#39;s internal large-scale monitoring platform. Configured monitoring across 1000+ datasets from StreetView, Wing, Waymo. Key metrics dashboards (P50, P95, Recall) for daily monitoring.</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>CI gate caught multiple regressions before integration</li>
+<li>Near-real-time monitoring across 1000+ datasets</li>
+<li>Both systems mandatory in release process</li>
+<li>Built quality infrastructure enabling confident delivery to production partners</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Quality infrastructure must evolve alongside the product</li>
+<li>Making the right metrics first-class and impossible to bypass is the foundation of partner trust</li>
+</ul>
+
+  </section>
+  <section id="story-07-base-station-backend" class="story" data-pane="stars">
+    <h1>Base Station Backend — Built Before Asked</h1>
+    <div class="theme-cn"><strong>主题：</strong>在客户尚在评估阶段时，主动预判到系统无法在production环境下规模化运行，独立设计并构建了reference station自动化后端系统，在客户准备集成时已就绪。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Delivered positioning engine prototype to StreetView (first client) — accuracy was excellent on labeled datasets</li>
+<li>Realized the engine doesn&#39;t scale: for every dataset, users had to manually identify a nearby reference station — impossible at production scale</li>
+<li>No one asked to solve this — client still in accuracy verification phase</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Design and build backend system that fully automates reference station data gathering and selection</li>
+<li>Must be ready before client finishes evaluation</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Designed three-component backend system: centralized database, cron job for periodic sync, selection service for automatic best-station selection</li>
+<li>Built core system within weeks — ready before client completed evaluation</li>
+<li>Continued improving: expanded data sources (more organizations), improved selection algorithm (additional factors + linear regression)</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>When StreetView moved to production — backend system already ready, zero delay</li>
+<li>Eliminated all manual reference station work → fully automated large-scale processing</li>
+<li>Became critical infrastructure; selection algorithm improvements contributed to accuracy for all downstream clients</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Best time to solve a scalability problem is before anyone asks</li>
+<li>Production readiness isn&#39;t just about accuracy — it&#39;s about removing every manual step that blocks automation</li>
+</ul>
+
+  </section>
+  <section id="story-08-hexagon-evaluation" class="story" data-pane="stars">
+    <h1>Hexagon Evaluation — Million-Dollar Business Decision</h1>
+    <div class="theme-cn"><strong>主题：</strong>PM让我从零设计Hexagon基站的技术评估方案，将价值分解为数据质量和覆盖密度两个独立维度并设计了controlled experiments，结果直接支撑了百万美元采购决策。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Positioning engine powering multiple products and scaling — reference station data is mandatory input</li>
+<li>PM in talks with a major commercial geolocation data vendor (thousands of stations, million-dollar contract)</li>
+<li>PM asked me to design and execute thorough technical evaluation — business decision would heavily rely on results</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Design evaluation methodology from scratch — no specific metrics or test plan given</li>
+<li>Produce results rigorous enough to justify or reject a million-dollar purchase</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Identified two independent value dimensions: data quality and coverage density</li>
+<li><strong>Test 1 — Data quality:</strong> Controlled comparison at co-located stations. The vendor supported more satellite networks → P95 error reduced by 5–30%.</li>
+<li><strong>Test 2 — Coverage density:</strong> Tested in underserved areas. Precision improvement + recall of highest-quality solution increased by 10×.</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Results used as key reference → contract signed</li>
+<li>Large-scale production: general 10% reduction in P95 error</li>
+<li>During 2025 US government shutdown, all public stations went down — the commercial vendor kept system running</li>
+<li>One engineer&#39;s evaluation directly informed a million-dollar decision</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Don&#39;t just ask &quot;is it better&quot; — decompose value into independent dimensions and test each in isolation</li>
+<li>Technical rigor in evaluation builds the trust needed for stakeholders to commit to major decisions</li>
+</ul>
+
+  </section>
+  <section id="story-09-technical-conflict" class="story" data-pane="stars">
+    <h1>Technical Conflict — Base Station Threshold</h1>
+    <div class="theme-cn"><strong>主题：</strong>在base station选站阈值决策中，与researcher产生技术分歧（20km vs 50km），通过全面数据分析和客户需求对齐证明20km方案更符合production目标。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Reference station selection algorithm needed distance threshold — 20km vs 50km disagreement</li>
+<li>20km: P50 slightly worse, P95 significantly better</li>
+<li>Directly affects positioning quality for all downstream clients</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Resolve disagreement with data, not opinion</li>
+<li>Prove which threshold better serves production clients</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Ran controlled experiments across multiple thresholds. 20km: P50 ~10cm→~15cm (slightly worse), P95 ~60cm→~50cm (meaningfully better).</li>
+<li>Aligned with client requirements: Waymo and StreetView consistently cared more about worst-case accuracy. Lane-level requirement tolerates up to ~50cm — P50 difference irrelevant, but P95 difference is meet vs. fail.</li>
+<li>Presented framing: &quot;which threshold aligns with what clients need&quot; not &quot;my number vs his.&quot;</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>TL adopted 20km threshold</li>
+<li>P95 improvement directly contributed to meeting production accuracy bar for Waymo and StreetView</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Technical disagreements best resolved by reframing to client requirements</li>
+<li>Data without context doesn&#39;t settle debates — data aligned to real requirements does</li>
+</ul>
+
+  </section>
+  <section id="story-10-handling-growth" class="story" data-pane="stars">
+    <h1>Negative Feedback — Handling Growth</h1>
+    <div class="theme-cn"><strong>主题：</strong>在项目scope快速增长导致任务积压和客户响应滞后后，接受lead的直接反馈，建立优先级框架、主动delegation和定期客户沟通机制。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Took ownership of more projects, became point of contact for multiple teams/clients simultaneously</li>
+<li>Long-term projects + short-term requests competing for time</li>
+<li>Tried to handle everything by working extended hours — tasks accumulated, client requests went unanswered</li>
+<li>Lead gave direct feedback: responsiveness slipping, tasks falling through cracks</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Fix immediate responsiveness problem</li>
+<li>Build sustainable system for managing parallel workstreams</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Prioritization framework:</strong> production-blocking → client-facing → internal improvements → research exploration</li>
+<li><strong>Active delegation:</strong> forwarded research-heavy work to researchers, supported with data prep/builds/testing</li>
+<li><strong>Client communication:</strong> proactive updates even without results — transparency replaced silence</li>
+<li><strong>AI-augmented workflow:</strong> automated repetitive tasks to free time for judgment-heavy work</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Production-blocking and client-facing tasks consistently resolved on time</li>
+<li>Client relationships improved through regular updates</li>
+<li>Better collaboration with researchers through clearer role division</li>
+<li>Sustainable workload management replaced unsustainable extended hours</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Working harder is not a strategy — when scope grows, you need a system, not more hours</li>
+<li>Biggest damage wasn&#39;t delayed tasks — it was silent non-responsiveness eroding client trust</li>
+</ul>
+
+  </section>
+  <section id="story-11-mentorship" class="story" data-pane="stars">
+    <h1>Mentorship Through Real Delivery</h1>
+    <div class="theme-cn"><strong>主题：</strong>通过将config集中管理的production任务设计为新人onboarding项目，让新工程师在完成真实交付过程中自然掌握全部技术栈。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>TL asked to help onboard new engineer and get them productive ASAP</li>
+<li>Project transitioning from prototype to production — needed centralized config management</li>
+<li>Saw connection between two independent needs</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Onboard new engineer effectively — build real understanding, not just tool familiarity</li>
+<li>Simultaneously deliver config management solution</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Designed config migration task as onboarding vehicle: requires walking through every component/layer and using every part of tech stack</li>
+<li>Structured for guided autonomy: explained background/goal/approach, let them explore independently, regular check-ins</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Config management delivered within weeks</li>
+<li>New engineer gained working knowledge of full codebase and tech stack through one meaningful task</li>
+<li>Became independently productive afterward</li>
+<li>Two goals achieved with one well-chosen project</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>Best onboarding isn&#39;t a checklist — it&#39;s a real task that forces touching every part of the system</li>
+<li>Guided autonomy builds independence faster than hand-holding</li>
+</ul>
+
+  </section>
+  <section id="story-12-v2-agent-harness-pivot" class="story" data-pane="stars">
+    <h1>V2 Agent Harness Pivot — Context → Harness Engineering</h1>
+    <div class="theme-cn"><strong>主题：</strong>识别V1固定pipeline的根本局限——LLM没有任何主动权——将平台从"上下文工程"重新设计为"harness工程"，在36小时sprint内端到端构建了自主诊断agent harness。</div>
+    <div class="meta-role">PolyU (STF AI Diagnostic Platform)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Built V1 of the AI diagnostic platform as a fixed deterministic pipeline: rule-based preprocessing → anomaly detection → clue generation → RAG → single-shot LLM</li>
+<li>Recognized a fundamental limitation: the LLM had no agency over data selection, retrieval, or follow-up investigation — the platform was a sophisticated QA bot, not a diagnostic agent</li>
+<li>Could not refine its own queries, could not iterate, could not say &quot;I need more data on a specific telemetry signal&quot;</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Evolve the architecture from &quot;context engineering&quot; (deterministic pipeline produces context for a one-shot LLM) to &quot;harness engineering&quot; (LLM drives investigation via tools)</li>
+<li>Sole architect and engineer — needed to research, design, propose, and ship</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Researched Anthropic&#39;s harness engineering principles and production agent design patterns</li>
+<li>Authored a detailed architectural proposal: 5-component model (Tools, Session log, Harness, Sandbox, Orchestration), graduated autonomy, privacy boundaries, cost/latency budgets</li>
+<li>Built the full V2 harness end-to-end in a concentrated 36-hour sprint: tool registry, ReAct agent loop, session event logging, token budget management, streaming API, autonomy router, frontend visualization</li>
+<li>Preserved V1 as a fast-path fallback so migration was zero-risk for simple cases</li>
+<li>Extended in follow-up work: agent-native tool redesign (replacing thin V1 wrappers), multimodal tool results (visual evidence from manuals)</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Platform evolved into an autonomous diagnostic agent that reasons iteratively, selects tools dynamically, and decides when it has sufficient evidence</li>
+<li>V2 harness became the foundation for all subsequent agent work (structured manual navigation, LLM-as-judge eval framework)</li>
+<li>5-component architecture is now the platform&#39;s core abstraction</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>The biggest architectural insights come from naming what&#39;s missing — &quot;the LLM has no agency&quot; reframes a whole class of problems</li>
+<li>A focused sprint with a clear architectural blueprint beats months of incremental drift</li>
+<li>Build the runtime first, then redesign the tool surface around what the agent actually needs — rather than wrapping legacy code</li>
+</ul>
+
+  </section>
+  <section id="story-13-ai-force-multiplier" class="story" data-pane="stars">
+    <h1>AI Force Multiplier — 10% Bandwidth Pattern</h1>
+    <div class="theme-cn"><strong>主题：</strong>利用AI作为效率倍增器，在约10%的带宽内重塑整个开发周期——构建团队内部工具、Agent Skills组合，并在内部AI Hackathon上展示，由TL推动跨团队推广。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Several recurring pain points in daily team workflow: manual setup for large test runs, parameter tuning by hand across hundreds of hardware-specific configurations, 1-2 hours every morning resolving code-review comments under Google&#39;s strict review-and-approve culture</li>
+<li>AI agents had matured to the point where they could meaningfully execute on well-scoped engineering tasks</li>
+<li>Wanted to test how far AI augmentation could shift the developer experience</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Use AI as a force multiplier on top of regular engineering work — without sacrificing primary deliverables</li>
+<li>Find pain points worth eliminating and ship working tools fast enough to show, not propose</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Built a one-click local-change verification CLI tool; evolved it with team feedback, added a GUI for casual users, then added a internal-cluster-parallelized remote-worker mode reducing feedback time from 3 hours to 20 minutes</li>
+<li>Forked Google&#39;s internal fine-tuning framework and wrapped it in a YAML-driven tool integrating real-dataset success criteria (P50/P95 error metrics) — full system built in an afternoon with AI assistance</li>
+<li>Built a portfolio of personal Agent Skills (code-review-comment resolution end-to-end, structured personal knowledge vault as persistent context for AI agents)</li>
+<li>Built team-wide Agent Skills that bridge zero-shot prompts to complex internal tool workflows</li>
+<li>Presented the team-wide Skill pattern at Google&#39;s internal AI Hackathon</li>
+<li>All on roughly 10% of bandwidth</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Test verification CLI became standard team tooling — saving researchers and scientists hours of work per week</li>
+<li>Fine-tuning tool discovered a parameter combination that reduced P95 error by 5% on the production engine across thousands of datasets</li>
+<li>Code-review-comment Skill replaced the 1-2 hour morning routine</li>
+<li>Team lead endorsed expanding the team-wide Skill pattern to other workflows and adjacent teams</li>
+<li>AI-augmented development collapsed the traditional &quot;discuss → align → build&quot; cycle into hours: ideas move from concept to working tool, surfacing in team meetings as a demo rather than a proposal</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>AI agents shift the cost curve of internal tooling — what was previously &quot;not worth a meeting to discuss&quot; becomes &quot;ship and demo same week&quot;</li>
+<li>The 10% bandwidth framing matters: it&#39;s a multiplier ON TOP OF primary work, not a substitute</li>
+<li>Once one engineer demonstrates a pattern, the team adopts it organically</li>
+</ul>
+
+  </section>
+  <section id="story-14-llm-as-judge-eval-framework" class="story" data-pane="stars">
+    <h1>LLM-as-Judge Evaluation Framework</h1>
+    <div class="theme-cn"><strong>主题：</strong>设计并构建了一套LLM-as-judge评估框架，把对agent的"感觉好像变好了"换成可重复、可对比的量化基准——以iteration为单位推进agent质量。</div>
+    <div class="meta-role">PolyU (STF AI Diagnostic Platform)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>After shipping the V2 agent harness and structured manual navigation, iteration on agent quality was running on gut feel — every change might help or hurt, but there was no measurement</li>
+<li>Without a benchmark, every &quot;improvement&quot; was an opinion; regression risk grew with each change</li>
+<li>Needed eval infrastructure that scales to multiple manuals and survives ongoing prompt and tool changes</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Establish a durable benchmark to iterate on agent quality with metric-driven feedback</li>
+<li>Solve the methodological challenges: who judges? how to avoid evaluation circularity? how to prevent silent regressions?</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Designed a cross-model framework — different model for golden-set generation vs. judging — eliminating same-model self-grading circularity</li>
+<li>Built a restricted manual-search sub-agent with explicit tool-scope constraints so the sub-agent reasons strictly within its assigned scope, enabling clean fact-recall scoring</li>
+<li>Designed a multi-dimension grading rubric: section match, fact recall, hallucination guard, citation correctness, tool-trajectory shape — with deterministic judge settings and a pinned model identifier so scores stay comparable across runs</li>
+<li>Built a grounded golden-set generator and human review CLI for workshop-expert validation: every candidate verifies its quote verbatim against source before writing — failures dropped, never written</li>
+<li>Adopted an immutable-version policy for golden sets: corrections bump to a new version directory rather than editing in place, so historical scores remain reproducible</li>
+<li>Captured a baseline benchmark on a real Chinese-language service manual, identified reproducible failure patterns, and ranked next iteration steps by expected impact and cost</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>The eval suite is now the regression-tracking foundation for all future agent and prompt changes — every change has a measurable before/after</li>
+<li>Identified four reproducible failure patterns and two judge-model anomalies, giving a prioritized roadmap rather than guesswork</li>
+<li>Cross-model + immutable-version design means scores stay meaningful as the platform evolves</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>An AI system without an eval framework is unverifiable — building the eval is part of building the system</li>
+<li>Cross-model design and immutable golden sets are the methodological choices that make scores comparable over time; everything else is implementation</li>
+<li>Eval-driven iteration changes how you debug: &quot;the score dropped on dimension X for case Y&quot; replaces &quot;the agent seems worse&quot;</li>
+</ul>
+
+  </section>
+  <section id="story-15-optimizer-as-fuzzer-pivot" class="story" data-pane="stars">
+    <h1>Optimizer-as-Fuzzer Pivot — From Tuning Tool to Auto-Bug-Fix Pipeline</h1>
+    <div class="theme-cn"><strong>主题：</strong>主动构建黑盒优化工具替代手工调参；过程中意外发现优化器在corner-case探索中触发了大量难以复现的隐藏bug，顺势在其之上再叠一层"发现→复现→profile→修复CL→ticket"的全自动pipeline，让两层工具在一个项目里串成体系。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>The positioning engine exposes hundreds-to-thousands of tunable knobs across signal processing, filtering, and motion modeling</li>
+<li>Researchers and engineers tuned by hand — no systematic way to find non-obvious optima or quantify multi-objective tradeoffs (latency vs fix-rate vs accuracy)</li>
+<li>I had proposed building a proper tuning tool weeks earlier; no one was assigned</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Build an automated parameter-tuning tool on top of Google&#39;s internal black-box optimization service that anyone could run with near-zero setup</li>
+<li>Generalize across arbitrary parameter sets and objectives so the tool stays useful as new algorithms and parameters land</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li>Designed a config-driven workflow with a 3-step UX (edit config → one command → monitor link), so non-experts could drive hundreds-of-parameter studies without learning the optimizer</li>
+<li>Built in resumability and natural-language config generation via the internal AI coding agent</li>
+<li>Validated on a real study that quantified the long-standing latency-vs-fix-rate tradeoff the team had carried for months</li>
+</ul>
+<p><strong>Pivot — Optimizer-as-Fuzzer:</strong></p>
+<ul>
+<li>During a 9-parameter study, the optimizer hit corner-case combinations no human would try and triggered multiple engine crashes within ~30 minutes — bugs the team had previously considered very difficult to reproduce</li>
+<li>Recognized the optimizer was inadvertently acting as a fuzzer (an automated bug finder driven by unusual input combinations) — a discovery surface, not a side effect</li>
+<li>Built a second pipeline on top: automatic bug discovery → reproduction harness → root-cause profiling → candidate fix-PR generation → bug ticket; humans only in PR review</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li>Tuning tool released team-wide; future-proof — new engine parameters become tunable automatically with no tool changes</li>
+<li>Auto-bug pipeline has already produced real bug tickets and fix PRs for a class of bugs that previously had no reliable repro path</li>
+<li>Established a new team pattern: large-scale automated parameter search isn&#39;t just for tuning — it&#39;s the cheapest fuzzer we have</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li>The most valuable feature was the one I didn&#39;t plan — the optimizer&#39;s exploration was a discovery surface; the bug-fix pipeline only became obvious after seeing which corner cases the search actually touched</li>
+<li>Adjacent automation compounds — Tool A (tuner) made Tool B (auto bug-fix pipeline) a one-step idea instead of a ten-step proposal</li>
+<li>Broad-applicability tooling is its own research strategy — it surfaces problems the team didn&#39;t know to ask about</li>
+</ul>
+
+  </section>
+  <section id="story-16-ionosphere-ekf-paper" class="story" data-pane="stars">
+    <h1>Ionosphere Paper — Paper-to-Production via AI Orchestration</h1>
+    <div class="theme-cn"><strong>主题：</strong>在自己看不懂论文的前提下，用AI编程agent + 自建评测套件 + 自动调参的工作流，一周独立完成原本需researcher+engineer数周协作的工作；把一篇未实践的学术论文推到生产，让定位引擎有效距离从20km延展到50km，北美覆盖40%→100%，零基建支出避免每年数百万美元订阅扩张开销。</div>
+    <div class="meta-role">Google (Bluewave RTK)</div>
+    <p><strong>Situation:</strong></p>
+<ul>
+<li>Production satellite positioning engine, industry-leading at ≤20km from a reference station; accuracy degrades beyond that range</li>
+<li>The team&#39;s existing third-party reference-station subscriptions covered only ~40% of North America at 20km radius; closing the rest would have cost millions/year — needed an algorithmic fix, not an infrastructure buy</li>
+<li>Long-standing pain point, no one was assigned</li>
+</ul>
+<p><strong>Task:</strong></p>
+<ul>
+<li>Algorithmic fix to recover long-distance accuracy with zero infrastructure spend</li>
+<li>Deliver without the traditional researcher → engineer → QA chain the team didn&#39;t have bandwidth for</li>
+</ul>
+<p><strong>Action:</strong></p>
+<ul>
+<li><strong>Found a candidate technique.</strong> Surveyed the literature; identified a paper proposing to extend the engine&#39;s core estimator with an extra variable modeling upper-atmosphere signal distortion — never implemented in any production system I could find</li>
+<li><strong>De-risked the premise cheaply.</strong> A 30-min walkthrough with our research scientist confirmed the math was sound — cheap insurance against building on a flawed premise</li>
+<li><strong>Designed the workflow, not the code.</strong> I couldn&#39;t read the paper, so I designed around that:<ul>
+<li>Handed paper + integration objectives to Google&#39;s internal AI coding agent; it produced the algorithm changes, no line-by-line review by design</li>
+<li>Verified via metric movement on an evaluation harness I&#39;d built earlier — thousands of recorded sessions with ground-truth positions</li>
+<li>Tuned new parameters with my auto-tuner; verified the optimum still held on a separate dataset</li>
+</ul>
+</li>
+<li>Team lead pushed it toward production rollout</li>
+</ul>
+<p><strong>Result:</strong></p>
+<ul>
+<li><strong>40% → 100% effective North America coverage</strong> — the 50km accuracy lift matched the prior 20km baseline, so existing subscriptions blanketed the territory. Zero infrastructure spend, millions/year saved</li>
+<li><strong>+10% accuracy in the 20–50km regime</strong> — the technical win that unlocked the coverage jump</li>
+<li><strong>One person, one week</strong> vs. the traditional researcher-+-engineer-+-QA multi-week chain</li>
+<li>Paper went from &quot;interesting but unvalidated&quot; to shipping in the production engine deployed at Waymo and Street View</li>
+</ul>
+<p><strong>Learned:</strong></p>
+<ul>
+<li><strong>AI orchestration changes the qualifications equation.</strong> I couldn&#39;t read the paper. With a strong eval harness and a codebase-aware AI agent, being able to read it wasn&#39;t required — being able to verify outcomes was</li>
+<li><strong>Prior infrastructure investments compound nonlinearly.</strong> The eval suite (Story 6) and auto-tuner (Story 15) were built earlier for unrelated reasons. AI-multiplied engineers are bottlenecked by verification infrastructure, not code-gen speed</li>
+</ul>
+
+  </section></div>
+    <div class="pane hidden" data-pane="sysdesign">
+  <section id="sd-01-short-url" class="sd-item" data-pane="sysdesign">
+    <h1>Short URL</h1>
+    <a class="sd-image-link" href="system-design/01.%20Short%20URL.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/01.%20Short%20URL.png" alt="Short URL" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-02-dropbox" class="sd-item" data-pane="sysdesign">
+    <h1>Dropbox</h1>
+    <a class="sd-image-link" href="system-design/02.%20Dropbox.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/02.%20Dropbox.png" alt="Dropbox" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-03-gopuff" class="sd-item" data-pane="sysdesign">
+    <h1>Gopuff</h1>
+    <a class="sd-image-link" href="system-design/03.%20Gopuff.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/03.%20Gopuff.png" alt="Gopuff" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-04-news-aggregator" class="sd-item" data-pane="sysdesign">
+    <h1>News Aggregator</h1>
+    <a class="sd-image-link" href="system-design/04.%20News%20Aggregator.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/04.%20News%20Aggregator.png" alt="News Aggregator" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-05-ticket-master" class="sd-item" data-pane="sysdesign">
+    <h1>Ticket Master</h1>
+    <a class="sd-image-link" href="system-design/05.%20Ticket%20Master.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/05.%20Ticket%20Master.png" alt="Ticket Master" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-06-fb-news-feed" class="sd-item" data-pane="sysdesign">
+    <h1>FB News Feed</h1>
+    <a class="sd-image-link" href="system-design/06.%20FB%20News%20Feed.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/06.%20FB%20News%20Feed.png" alt="FB News Feed" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-07-tinder" class="sd-item" data-pane="sysdesign">
+    <h1>Tinder</h1>
+    <a class="sd-image-link" href="system-design/07.%20Tinder.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/07.%20Tinder.png" alt="Tinder" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-08-leetcode-r" class="sd-item" data-pane="sysdesign">
+    <h1>Leetcode</h1>
+    <a class="sd-image-link" href="system-design/08.%20Leetcode(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/08.%20Leetcode(R).png" alt="Leetcode" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-09-online-chat" class="sd-item" data-pane="sysdesign">
+    <h1>Online Chat</h1>
+    <a class="sd-image-link" href="system-design/09.%20Online%20Chat.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/09.%20Online%20Chat.png" alt="Online Chat" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-10-business-review-r" class="sd-item" data-pane="sysdesign">
+    <h1>Business Review</h1>
+    <a class="sd-image-link" href="system-design/10.%20Business%20Review(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/10.%20Business%20Review(R).png" alt="Business Review" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-11-fitness-app" class="sd-item" data-pane="sysdesign">
+    <h1>Fitness APP</h1>
+    <a class="sd-image-link" href="system-design/11.%20Fitness%20APP.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/11.%20Fitness%20APP.png" alt="Fitness APP" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-13-online-ah-r" class="sd-item" data-pane="sysdesign">
+    <h1>Online AH</h1>
+    <a class="sd-image-link" href="system-design/13.%20Online%20AH(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/13.%20Online%20AH(R).png" alt="Online AH" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-14-live-comment-r" class="sd-item" data-pane="sysdesign">
+    <h1>Live Comment</h1>
+    <a class="sd-image-link" href="system-design/14.%20Live%20Comment(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/14.%20Live%20Comment(R).png" alt="Live Comment" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-15-fb-search" class="sd-item" data-pane="sysdesign">
+    <h1>FB Search</h1>
+    <a class="sd-image-link" href="system-design/15.%20FB%20Search.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/15.%20FB%20Search.png" alt="FB Search" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-16-price-tracking-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Price Tracking System</h1>
+    <a class="sd-image-link" href="system-design/16.%20Price%20Tracking%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/16.%20Price%20Tracking%20System(R).png" alt="Price Tracking System" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-17-instagram-r" class="sd-item" data-pane="sysdesign">
+    <h1>Instagram</h1>
+    <a class="sd-image-link" href="system-design/17.%20Instagram(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/17.%20Instagram(R).png" alt="Instagram" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-18-top-k-r" class="sd-item" data-pane="sysdesign">
+    <h1>top k</h1>
+    <a class="sd-image-link" href="system-design/18.%20top%20k(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/18.%20top%20k(R).png" alt="top k" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-19-uber-r" class="sd-item" data-pane="sysdesign">
+    <h1>Uber</h1>
+    <a class="sd-image-link" href="system-design/19.%20Uber(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/19.%20Uber(R).png" alt="Uber" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-20-robinhood-r" class="sd-item" data-pane="sysdesign">
+    <h1>RobinHOOD</h1>
+    <a class="sd-image-link" href="system-design/20.%20RobinHOOD(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/20.%20RobinHOOD(R).png" alt="RobinHOOD" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-21-google-doc" class="sd-item" data-pane="sysdesign">
+    <h1>Google Doc</h1>
+    <a class="sd-image-link" href="system-design/21.%20Google%20Doc.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/21.%20Google%20Doc.png" alt="Google Doc" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-22-distributed-cache" class="sd-item" data-pane="sysdesign">
+    <h1>Distributed Cache</h1>
+    <a class="sd-image-link" href="system-design/22.%20Distributed%20Cache.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/22.%20Distributed%20Cache.png" alt="Distributed Cache" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-23-youtube-r" class="sd-item" data-pane="sysdesign">
+    <h1>Youtube</h1>
+    <a class="sd-image-link" href="system-design/23.%20Youtube(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/23.%20Youtube(R).png" alt="Youtube" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-24-task-scheduler-r" class="sd-item" data-pane="sysdesign">
+    <h1>Task Scheduler</h1>
+    <a class="sd-image-link" href="system-design/24.%20Task%20Scheduler(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/24.%20Task%20Scheduler(R).png" alt="Task Scheduler" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-25-web-crawler" class="sd-item" data-pane="sysdesign">
+    <h1>Web Crawler</h1>
+    <a class="sd-image-link" href="system-design/25.%20Web%20Crawler.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/25.%20Web%20Crawler.png" alt="Web Crawler" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-26-ad-click-aggregation-r" class="sd-item" data-pane="sysdesign">
+    <h1>Ad click Aggregation</h1>
+    <a class="sd-image-link" href="system-design/26.%20Ad%20click%20Aggregation(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/26.%20Ad%20click%20Aggregation(R).png" alt="Ad click Aggregation" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-27-payment-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Payment System</h1>
+    <a class="sd-image-link" href="system-design/27.%20Payment%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/27.%20Payment%20System(R).png" alt="Payment System" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-29-chatgpt" class="sd-item" data-pane="sysdesign">
+    <h1>ChatGPT</h1>
+    <a class="sd-image-link" href="system-design/29.%20ChatGPT.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/29.%20ChatGPT.png" alt="ChatGPT" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-30-flash-sale-r" class="sd-item" data-pane="sysdesign">
+    <h1>Flash Sale</h1>
+    <a class="sd-image-link" href="system-design/30.%20Flash%20Sale(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/30.%20Flash%20Sale(R).png" alt="Flash Sale" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-31-notification-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Notification System</h1>
+    <a class="sd-image-link" href="system-design/31.%20Notification%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/31.%20Notification%20System(R).png" alt="Notification System" loading="lazy">
+    </a>
+  </section></div>
+  </main>
+</div>
+<div id="tip"><div class="t"></div><div class="b"></div></div>
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const navLists = document.querySelectorAll('.nav-list');
+  const panes = document.querySelectorAll('.pane');
+  const navItems = document.querySelectorAll('.nav-item');
+  const navSubs = document.querySelectorAll('.nav-sub');
+  const navSubItems = document.querySelectorAll('.nav-sub-item');
+
+  function activateTab(name, scrollTop = true) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    navLists.forEach(l => l.classList.toggle('hidden', l.dataset.list !== name));
+    panes.forEach(p => p.classList.toggle('hidden', p.dataset.pane !== name));
+    history.replaceState(null, '', '#tab=' + name);
+    if (scrollTop) window.scrollTo({ top: 0 });
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+  // scrollspy: sections highlight their parent nav-item and expand the sub-nav;
+  // H2s inside a section highlight the matching sub-item.
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target;
+      const id = el.id;
+      if (el.tagName === 'SECTION') {
+        navItems.forEach(n => n.classList.toggle('active', n.dataset.id === id));
+        navSubs.forEach(s => {
+          if (s.classList.contains('always-on')) return;
+          s.classList.toggle('expanded', s.dataset.parent === id);
+        });
+      } else if (el.tagName === 'H2') {
+        navSubItems.forEach(n => n.classList.toggle('active', n.dataset.id === id));
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  document.querySelectorAll('section[id], section h2[id]').forEach(el => observer.observe(el));
+
+  function smoothScrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', '#' + id);
+  }
+
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      smoothScrollTo(item.dataset.id);
+    });
+  });
+
+  navSubItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      smoothScrollTo(item.dataset.id);
+    });
+  });
+
+  // Route to the tab/section named in the hash — on load AND on every hash change,
+  // so in-content links (e.g. a PROJECT question -> a STAR story) switch tabs and scroll.
+  function tabForHash(h) {
+    const m = h.match(/^#tab=(general|stars|sysdesign)$/);
+    if (m) return m[1];
+    if (h.startsWith('#sd-')) return 'sysdesign';
+    if (h.startsWith('#note-')) return 'general';
+    if (h.startsWith('#story-')) return 'stars';
+    return null;
+  }
+  function routeToHash() {
+    const h = location.hash;
+    const tab = tabForHash(h);
+    if (!tab) return;
+    const isAnchor = !/^#tab=/.test(h);
+    activateTab(tab, !isAnchor);
+    if (isAnchor) {
+      const el = document.getElementById(h.slice(1));
+      if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }
+  routeToHash();
+  window.addEventListener('hashchange', routeToHash);
+
+  // hover-hint popover: hover to peek, click to pin, Esc to dismiss
+  (function(){
+    var tip = document.getElementById('tip');
+    if (!tip) return;
+    var tt = tip.querySelector('.t'), tb = tip.querySelector('.b');
+    var current = null, pinned = false, hideTimer = null;
+    function show(el){
+      if (pinned) return;
+      current = el;
+      tt.textContent = el.dataset.title;
+      tb.innerHTML = el.dataset.tip;
+      tip.style.display = 'block';
+      var r = el.getBoundingClientRect();
+      var top = r.bottom + window.scrollY + 8;
+      var left = Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - tip.offsetWidth - 16);
+      if (top + tip.offsetHeight > window.scrollY + window.innerHeight - 10)
+        top = r.top + window.scrollY - tip.offsetHeight - 8;
+      tip.style.top = top + 'px';
+      tip.style.left = Math.max(left, 8) + 'px';
+    }
+    function scheduleHide(){
+      if (pinned) return;
+      hideTimer = setTimeout(function(){ tip.style.display='none'; current=null; }, 350);
+    }
+    function cancelHide(){ if (hideTimer) { clearTimeout(hideTimer); hideTimer=null; } }
+    document.querySelectorAll('.hint').forEach(function(el){
+      el.addEventListener('mouseenter', function(){ cancelHide(); show(el); });
+      el.addEventListener('mouseleave', scheduleHide);
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        if (pinned && current === el) { unpin(); return; }
+        pinned = false; show(el); pinned = true;
+        tip.classList.add('pinned');
+        document.querySelectorAll('.hint.pinned').forEach(function(h){ h.classList.remove('pinned'); });
+        el.classList.add('pinned');
+      });
+    });
+    tip.addEventListener('mouseenter', cancelHide);
+    tip.addEventListener('mouseleave', scheduleHide);
+    function unpin(){
+      pinned = false; tip.classList.remove('pinned');
+      document.querySelectorAll('.hint.pinned').forEach(function(h){ h.classList.remove('pinned'); });
+      tip.style.display='none'; current=null;
+    }
+    document.addEventListener('click', function(){ if (pinned) unpin(); });
+    document.addEventListener('keydown', function(e){ if (e.key==='Escape') unpin(); });
+  })();
+</script>
+</body>
+</html>
