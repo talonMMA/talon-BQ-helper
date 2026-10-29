@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BQ Teleprompter</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --sidebar-bg: #f7f9fc;
+    --sidebar-border: #e1e4e8;
+    --text: #1f2328;
+    --text-muted: #656d76;
+    --accent: #0969da;
+    --accent-bg: #ddf4ff;
+    --code-bg: #f6f8fa;
+    --hint: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --sidebar-bg: #161b22;
+      --sidebar-border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-bg: #1f3552;
+      --code-bg: #161b22;
+      --hint: #e8c47a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+               line-height: 1.6; }
+  .layout { display: flex; min-height: 100vh; }
+  aside {
+    width: 280px; flex-shrink: 0;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 0;
+    display: flex; flex-direction: column;
+  }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--sidebar-border);
+    background: var(--sidebar-bg);
+    position: sticky; top: 0; z-index: 2;
+  }
+  .tab {
+    flex: 1;
+    background: none;
+    border: 0;
+    padding: 14px 8px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tab:hover { background: var(--accent-bg); color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .nav-list { padding: 12px 0; }
+  .nav-list.hidden { display: none; }
+  .nav-item {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 8px 16px;
+    text-decoration: none; color: var(--text);
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .nav-item:hover { background: var(--accent-bg); }
+  .nav-item.active {
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-num {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .nav-title { line-height: 1.35; }
+  .nav-sub {
+    display: none;
+    padding: 2px 0 8px 0;
+    background: var(--bg);
+  }
+  .nav-sub.expanded { display: block; }
+  .nav-sub-item {
+    display: block;
+    padding: 5px 14px 5px 40px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+    border-left: 3px solid transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .nav-sub-item:hover { background: var(--accent-bg); color: var(--text); }
+  .nav-sub-item.active {
+    color: var(--accent);
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-sub-item code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.92em;
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+  }
+  main { flex: 1; padding: 32px 48px; max-width: 1100px; }
+  .pane.hidden { display: none; }
+  .story, .sd-item {
+    padding-bottom: 64px; border-bottom: 1px solid var(--sidebar-border);
+    margin-bottom: 32px;
+  }
+  .story:last-child, .sd-item:last-child { border-bottom: none; }
+  .story h1, .sd-item h1 { margin-top: 8px; font-size: 28px; line-height: 1.3; }
+  .theme-cn {
+    background: var(--code-bg);
+    padding: 12px 16px; border-left: 3px solid var(--accent);
+    margin: 12px 0 20px; font-size: 14px; border-radius: 4px;
+  }
+  .meta-role {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .story h2, .story h3, .story h4 { margin-top: 24px; }
+  .story p { margin: 12px 0; }
+  .story ul, .story ol { padding-left: 24px; }
+  .story li { margin: 6px 0; }
+  .story strong { color: var(--text); }
+  .story code {
+    background: var(--code-bg);
+    padding: 2px 6px; border-radius: 3px;
+    font-size: 0.9em;
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+  }
+  .story hr { border: none; border-top: 1px solid var(--sidebar-border); margin: 24px 0; }
+
+  /* hover-hint teleprompter mode */
+  .hint { border-bottom: 1.5px dashed var(--hint); cursor: help; color: var(--hint); font-weight: 600; }
+  .hint.pinned { background: var(--accent-bg); border-radius: 3px; }
+  #tip {
+    position: absolute; z-index: 99; max-width: 540px; min-width: 300px;
+    background: var(--sidebar-bg); border: 1px solid var(--hint); border-radius: 10px;
+    padding: 12px 16px; font-size: 0.9em; line-height: 1.75;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35); display: none;
+  }
+  #tip .t { color: var(--hint); font-weight: 600; margin-bottom: 6px; }
+  #tip.pinned { border-width: 2px; }
+
+  .sd-image-link { display: block; }
+  .sd-image {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 4px;
+    margin-top: 12px;
+    background: #fff;
+  }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; height: auto; max-height: 50vh; position: relative; }
+    main { padding: 20px; }
+  }
+
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="tabs">
+      <button class="tab active" data-tab="general">General</button>
+      
+      <button class="tab" data-tab="sysdesign">System Design</button>
+    </div>
+    <nav class="nav-list" data-list="general">
+  <a href="#note-09-hm-call" class="nav-item" data-id="note-09-hm-call" data-list="general">
+    <span class="nav-num">01</span>
+    <span class="nav-title">Hiring Manager Call — 定稿话术</span>
+  </a>
+  <div class="nav-sub always-on expanded" data-parent="note-09-hm-call">
+    <a href="#note-09-hm-call-h-1-tell-me-about-yourself" class="nav-sub-item" data-id="note-09-hm-call-h-1-tell-me-about-yourself" data-list="general">1. Tell me about yourself（自我介绍）</a><a href="#note-09-hm-call-h-2-what-are-you-looking-for-in-your-next-role" class="nav-sub-item" data-id="note-09-hm-call-h-2-what-are-you-looking-for-in-your-next-role" data-list="general">2. What are you looking for in your next role?</a><a href="#note-09-hm-call-h-3-why-are-you-leaving-google-why-now" class="nav-sub-item" data-id="note-09-hm-call-h-3-why-are-you-leaving-google-why-now" data-list="general">3. Why are you leaving Google? / Why now?</a><a href="#note-09-hm-call-h-4-why-this-company-this-role" class="nav-sub-item" data-id="note-09-hm-call-h-4-why-this-company-this-role" data-list="general">4. Why this company / this role?</a><a href="#note-09-hm-call-h-5-do-you-need-visa-sponsorship" class="nav-sub-item" data-id="note-09-hm-call-h-5-do-you-need-visa-sponsorship" data-list="general">5. Do you need visa sponsorship?</a><a href="#note-09-hm-call-h-6-what-are-your-compensation-expectations" class="nav-sub-item" data-id="note-09-hm-call-h-6-what-are-your-compensation-expectations" data-list="general">6. What are your compensation expectations?</a><a href="#note-09-hm-call-h-7-timeline-other-processes-when-could-you-start" class="nav-sub-item" data-id="note-09-hm-call-h-7-timeline-other-processes-when-could-you-start" data-list="general">7. Timeline: other processes, when could you start?</a><a href="#note-09-hm-call-h-8-location-remote-hybrid-relocation" class="nav-sub-item" data-id="note-09-hm-call-h-8-location-remote-hybrid-relocation" data-list="general">8. Location: remote, hybrid, relocation?</a><a href="#note-09-hm-call-h-9" class="nav-sub-item" data-id="note-09-hm-call-h-9" data-list="general">9. 我反问招聘经理的问题</a>
+  </div></nav>
+    <nav class="nav-list hidden" data-list="stars"></nav>
+    <nav class="nav-list hidden" data-list="sysdesign">
+  <a href="#sd-01-short-url" class="nav-item" data-id="sd-01-short-url" data-list="sysdesign">
+    <span class="nav-num">01</span>
+    <span class="nav-title">Short URL</span>
+  </a>
+  <a href="#sd-02-dropbox" class="nav-item" data-id="sd-02-dropbox" data-list="sysdesign">
+    <span class="nav-num">02</span>
+    <span class="nav-title">Dropbox</span>
+  </a>
+  <a href="#sd-03-gopuff" class="nav-item" data-id="sd-03-gopuff" data-list="sysdesign">
+    <span class="nav-num">03</span>
+    <span class="nav-title">Gopuff</span>
+  </a>
+  <a href="#sd-04-news-aggregator" class="nav-item" data-id="sd-04-news-aggregator" data-list="sysdesign">
+    <span class="nav-num">04</span>
+    <span class="nav-title">News Aggregator</span>
+  </a>
+  <a href="#sd-05-ticket-master" class="nav-item" data-id="sd-05-ticket-master" data-list="sysdesign">
+    <span class="nav-num">05</span>
+    <span class="nav-title">Ticket Master</span>
+  </a>
+  <a href="#sd-06-fb-news-feed" class="nav-item" data-id="sd-06-fb-news-feed" data-list="sysdesign">
+    <span class="nav-num">06</span>
+    <span class="nav-title">FB News Feed</span>
+  </a>
+  <a href="#sd-07-tinder" class="nav-item" data-id="sd-07-tinder" data-list="sysdesign">
+    <span class="nav-num">07</span>
+    <span class="nav-title">Tinder</span>
+  </a>
+  <a href="#sd-08-leetcode-r" class="nav-item" data-id="sd-08-leetcode-r" data-list="sysdesign">
+    <span class="nav-num">08</span>
+    <span class="nav-title">Leetcode</span>
+  </a>
+  <a href="#sd-09-online-chat" class="nav-item" data-id="sd-09-online-chat" data-list="sysdesign">
+    <span class="nav-num">09</span>
+    <span class="nav-title">Online Chat</span>
+  </a>
+  <a href="#sd-10-business-review-r" class="nav-item" data-id="sd-10-business-review-r" data-list="sysdesign">
+    <span class="nav-num">10</span>
+    <span class="nav-title">Business Review</span>
+  </a>
+  <a href="#sd-11-fitness-app" class="nav-item" data-id="sd-11-fitness-app" data-list="sysdesign">
+    <span class="nav-num">11</span>
+    <span class="nav-title">Fitness APP</span>
+  </a>
+  <a href="#sd-13-online-ah-r" class="nav-item" data-id="sd-13-online-ah-r" data-list="sysdesign">
+    <span class="nav-num">12</span>
+    <span class="nav-title">Online AH</span>
+  </a>
+  <a href="#sd-14-live-comment-r" class="nav-item" data-id="sd-14-live-comment-r" data-list="sysdesign">
+    <span class="nav-num">13</span>
+    <span class="nav-title">Live Comment</span>
+  </a>
+  <a href="#sd-15-fb-search" class="nav-item" data-id="sd-15-fb-search" data-list="sysdesign">
+    <span class="nav-num">14</span>
+    <span class="nav-title">FB Search</span>
+  </a>
+  <a href="#sd-16-price-tracking-system-r" class="nav-item" data-id="sd-16-price-tracking-system-r" data-list="sysdesign">
+    <span class="nav-num">15</span>
+    <span class="nav-title">Price Tracking System</span>
+  </a>
+  <a href="#sd-17-instagram-r" class="nav-item" data-id="sd-17-instagram-r" data-list="sysdesign">
+    <span class="nav-num">16</span>
+    <span class="nav-title">Instagram</span>
+  </a>
+  <a href="#sd-18-top-k-r" class="nav-item" data-id="sd-18-top-k-r" data-list="sysdesign">
+    <span class="nav-num">17</span>
+    <span class="nav-title">top k</span>
+  </a>
+  <a href="#sd-19-uber-r" class="nav-item" data-id="sd-19-uber-r" data-list="sysdesign">
+    <span class="nav-num">18</span>
+    <span class="nav-title">Uber</span>
+  </a>
+  <a href="#sd-20-robinhood-r" class="nav-item" data-id="sd-20-robinhood-r" data-list="sysdesign">
+    <span class="nav-num">19</span>
+    <span class="nav-title">RobinHOOD</span>
+  </a>
+  <a href="#sd-21-google-doc" class="nav-item" data-id="sd-21-google-doc" data-list="sysdesign">
+    <span class="nav-num">20</span>
+    <span class="nav-title">Google Doc</span>
+  </a>
+  <a href="#sd-22-distributed-cache" class="nav-item" data-id="sd-22-distributed-cache" data-list="sysdesign">
+    <span class="nav-num">21</span>
+    <span class="nav-title">Distributed Cache</span>
+  </a>
+  <a href="#sd-23-youtube-r" class="nav-item" data-id="sd-23-youtube-r" data-list="sysdesign">
+    <span class="nav-num">22</span>
+    <span class="nav-title">Youtube</span>
+  </a>
+  <a href="#sd-24-task-scheduler-r" class="nav-item" data-id="sd-24-task-scheduler-r" data-list="sysdesign">
+    <span class="nav-num">23</span>
+    <span class="nav-title">Task Scheduler</span>
+  </a>
+  <a href="#sd-25-web-crawler" class="nav-item" data-id="sd-25-web-crawler" data-list="sysdesign">
+    <span class="nav-num">24</span>
+    <span class="nav-title">Web Crawler</span>
+  </a>
+  <a href="#sd-26-ad-click-aggregation-r" class="nav-item" data-id="sd-26-ad-click-aggregation-r" data-list="sysdesign">
+    <span class="nav-num">25</span>
+    <span class="nav-title">Ad click Aggregation</span>
+  </a>
+  <a href="#sd-27-payment-system-r" class="nav-item" data-id="sd-27-payment-system-r" data-list="sysdesign">
+    <span class="nav-num">26</span>
+    <span class="nav-title">Payment System</span>
+  </a>
+  <a href="#sd-29-chatgpt" class="nav-item" data-id="sd-29-chatgpt" data-list="sysdesign">
+    <span class="nav-num">27</span>
+    <span class="nav-title">ChatGPT</span>
+  </a>
+  <a href="#sd-30-flash-sale-r" class="nav-item" data-id="sd-30-flash-sale-r" data-list="sysdesign">
+    <span class="nav-num">28</span>
+    <span class="nav-title">Flash Sale</span>
+  </a>
+  <a href="#sd-31-notification-system-r" class="nav-item" data-id="sd-31-notification-system-r" data-list="sysdesign">
+    <span class="nav-num">29</span>
+    <span class="nav-title">Notification System</span>
+  </a></nav>
+  </aside>
+  <main>
+    <div class="pane" data-pane="general">
+  <section id="note-09-hm-call" class="story" data-pane="general">
+    <h1>Hiring Manager Call — 定稿话术</h1>
+    <div class="theme-cn"><strong>主题：</strong>招聘经理（技术出身）初次通话的定稿话术</div>
+    <div class="meta-role">对象：Hiring Manager（首个实例 Antora · Liz Theurer，Senior Software Engineering Manager，此前是 Staff SWE）</div>
+    <!-- 本文件只针对"技术出身的招聘经理初次通话"；recruiter / 工程师面试的版本另开文件，不混写。
+     话术以用户口述为准：用户出、Claude 记。用户请 Claude 打样时，样稿明确标"样稿"，用户改过并说"定"才算定稿。
+     口述原话、每次改动的来龙去脉记在 _09-HM-Call-Log.md（下划线开头，不进提词器）。
+     本文件不带下划线，会同步到 BQ helper（密码保护，但密文在公开仓库）：不写电话号码、证件号这类信息。
+     口述中冒出的新经历 / 新数字照常走 /fact 入卡；话术里不写没有卡支撑的经历。口头职位说 "Software Engineer at Google"，不带 Vendor。
+     口语稿规则（用户 2026-10-28）：提词器上的稿要能直接念、听着不像念稿。短句；不用 First / Second / Third 这类排比；
+     不用破折号、冒号、括号、分号这类念不出来的符号；技术部分一两句带过，篇幅给项目带来的影响；数字写成能顺口念的样子。 --><h2 id="note-09-hm-call-h-1-tell-me-about-yourself">1. Tell me about yourself（自我介绍）</h2>
+<p><strong>定稿（2026-10-29 用户定；Claude 打样、用户逐句改；约 180 词，约 70 秒）</strong></p>
+<blockquote>
+<p>Thanks for taking the time, Liz.</p>
+<p>So I&#39;m a software engineer at Google. For the past four years, I&#39;ve been a core developer on several high-precision GPS projects.</p>
+<p>We deliver high-precision GPS to some really important teams.</p>
+<p>Google Street View uses it to cut the long-tail errors in their maps by 20 to 30 percent.</p>
+<p>Waymo uses it to build their maps, and it helps them map new cities faster as they expand their self-driving service.</p>
+<p>Both are already in production. And since these are huge projects, that adds up to a real impact.</p>
+<p>Our next customer is Wing. We want to bring high-precision GPS to their delivery drones.</p>
+<p>On the engineering side, I&#39;m mainly responsible for backend development and infrastructure, including performance optimization, large-scale monitoring, and our evaluation system. I also take new algorithms from research into production, and I&#39;ve been driving AI adoption on my team.</p>
+<p>Outside Google, I&#39;m the full-stack engineer and architect on an AI system that helps mechanics diagnose vehicles. It&#39;s piloting in a fleet workshop right now.</p>
+<p>So that&#39;s a bit about me. If there&#39;s a role on your team that&#39;s a good fit for me, I&#39;d be happy to dig deeper.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-2-what-are-you-looking-for-in-your-next-role">2. What are you looking for in your next role?</h2>
+<p><strong>用户口述整理（定稿 2026-10-29；约 75 词，约 30 秒）</strong></p>
+<blockquote>
+<p>I&#39;m looking to move into AI. Not training the models themselves, but applied AI, things like AI agents, coding agents, and AI infrastructure.</p>
+<p>On top of my main job, I&#39;ve put a lot of time into this, both at work and on my own time, learning it and actually building with it. And I&#39;ve found I really enjoy it.</p>
+<p>So that&#39;s the main direction I&#39;m looking at next.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-3-why-are-you-leaving-google-why-now">3. Why are you leaving Google? / Why now?</h2>
+<p><strong>用户口述整理（定稿 2026-10-29；约 55 词，约 20 秒）</strong></p>
+<blockquote>
+<p>It&#39;s pretty simple. I want to move from GPS work into AI. I think AI is the field worth focusing on for at least the next ten years.</p>
+<p>Moving into an AI role inside Google, especially at Google DeepMind, is really competitive. Honestly, I&#39;d rather build real hands-on experience at a smaller company, where I can own more of the work.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-4-why-this-company-this-role">4. Why this company / this role?</h2>
+<p><strong>用户口述整理（定稿 2026-10-29；第二句按公司换，下面是 Antora；约 65 词，约 25 秒）</strong></p>
+<blockquote>
+<p>I took a quick look at what your company is doing. You&#39;re building thermal batteries that turn cheap electricity into heat and power for industry and data centers. And this role builds the software products that run the business, and connects AI to the company&#39;s data. It lines up well with where I want to go next, which is focusing on AI.</p>
+<p>I don&#39;t know much about your culture yet. But just from the business and the direction, it&#39;s what I&#39;m looking for in my next job.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-5-do-you-need-visa-sponsorship">5. Do you need visa sponsorship?</h2>
+<p><strong>Claude 按事实写（定稿 2026-10-29，用户要求一句话）</strong></p>
+<blockquote>
+<p>Yes, I&#39;m on an H-1B, so I&#39;d need a transfer, and since I&#39;ve already been through the lottery, there&#39;s no new lottery involved.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-6-what-are-your-compensation-expectations">6. What are your compensation expectations?</h2>
+<p><strong>用户口述整理（定稿 2026-10-29）</strong></p>
+<blockquote>
+<p>I don&#39;t want to take a lower base than I have now, so I&#39;m looking for a base of 200K, plus bonus on top.</p>
+<p>On the total package, I&#39;m pretty flexible.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-7-timeline-other-processes-when-could-you-start">7. Timeline: other processes, when could you start?</h2>
+<p><strong>Claude 按事实写（定稿 2026-10-29，用户要求简单回答）</strong></p>
+<blockquote>
+<p>I&#39;m in early conversations with a few other companies, nothing at the offer stage yet.</p>
+<p>On start date, once there&#39;s an offer, the main step is filing the H-1B transfer. After that I can start, so usually within a few weeks.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-8-location-remote-hybrid-relocation">8. Location: remote, hybrid, relocation?</h2>
+<p><strong>用户口述整理（定稿 2026-10-29）</strong></p>
+<blockquote>
+<p>I&#39;m based in San Francisco. I&#39;d prefer remote, but I&#39;m open to relocating if the role needs it.</p>
+</blockquote>
+<h2 id="note-09-hm-call-h-9">9. 我反问招聘经理的问题</h2>
+<p><strong>用户口述整理（定稿 2026-10-29）</strong></p>
+<p>她没讲面试流程时：</p>
+<blockquote>
+<p>What does the interview process look like from here?</p>
+</blockquote>
+<p>她已经讲过时：</p>
+<blockquote>
+<p>That covers my main question, which was the interview process. I&#39;d really like to talk with your engineers in the technical rounds, so I don&#39;t have anything else for now.</p>
+</blockquote>
+
+  </section></div>
+    <div class="pane hidden" data-pane="stars"></div>
+    <div class="pane hidden" data-pane="sysdesign">
+  <section id="sd-01-short-url" class="sd-item" data-pane="sysdesign">
+    <h1>Short URL</h1>
+    <a class="sd-image-link" href="system-design/01.%20Short%20URL.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/01.%20Short%20URL.png" alt="Short URL" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-02-dropbox" class="sd-item" data-pane="sysdesign">
+    <h1>Dropbox</h1>
+    <a class="sd-image-link" href="system-design/02.%20Dropbox.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/02.%20Dropbox.png" alt="Dropbox" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-03-gopuff" class="sd-item" data-pane="sysdesign">
+    <h1>Gopuff</h1>
+    <a class="sd-image-link" href="system-design/03.%20Gopuff.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/03.%20Gopuff.png" alt="Gopuff" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-04-news-aggregator" class="sd-item" data-pane="sysdesign">
+    <h1>News Aggregator</h1>
+    <a class="sd-image-link" href="system-design/04.%20News%20Aggregator.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/04.%20News%20Aggregator.png" alt="News Aggregator" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-05-ticket-master" class="sd-item" data-pane="sysdesign">
+    <h1>Ticket Master</h1>
+    <a class="sd-image-link" href="system-design/05.%20Ticket%20Master.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/05.%20Ticket%20Master.png" alt="Ticket Master" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-06-fb-news-feed" class="sd-item" data-pane="sysdesign">
+    <h1>FB News Feed</h1>
+    <a class="sd-image-link" href="system-design/06.%20FB%20News%20Feed.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/06.%20FB%20News%20Feed.png" alt="FB News Feed" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-07-tinder" class="sd-item" data-pane="sysdesign">
+    <h1>Tinder</h1>
+    <a class="sd-image-link" href="system-design/07.%20Tinder.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/07.%20Tinder.png" alt="Tinder" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-08-leetcode-r" class="sd-item" data-pane="sysdesign">
+    <h1>Leetcode</h1>
+    <a class="sd-image-link" href="system-design/08.%20Leetcode(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/08.%20Leetcode(R).png" alt="Leetcode" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-09-online-chat" class="sd-item" data-pane="sysdesign">
+    <h1>Online Chat</h1>
+    <a class="sd-image-link" href="system-design/09.%20Online%20Chat.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/09.%20Online%20Chat.png" alt="Online Chat" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-10-business-review-r" class="sd-item" data-pane="sysdesign">
+    <h1>Business Review</h1>
+    <a class="sd-image-link" href="system-design/10.%20Business%20Review(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/10.%20Business%20Review(R).png" alt="Business Review" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-11-fitness-app" class="sd-item" data-pane="sysdesign">
+    <h1>Fitness APP</h1>
+    <a class="sd-image-link" href="system-design/11.%20Fitness%20APP.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/11.%20Fitness%20APP.png" alt="Fitness APP" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-13-online-ah-r" class="sd-item" data-pane="sysdesign">
+    <h1>Online AH</h1>
+    <a class="sd-image-link" href="system-design/13.%20Online%20AH(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/13.%20Online%20AH(R).png" alt="Online AH" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-14-live-comment-r" class="sd-item" data-pane="sysdesign">
+    <h1>Live Comment</h1>
+    <a class="sd-image-link" href="system-design/14.%20Live%20Comment(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/14.%20Live%20Comment(R).png" alt="Live Comment" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-15-fb-search" class="sd-item" data-pane="sysdesign">
+    <h1>FB Search</h1>
+    <a class="sd-image-link" href="system-design/15.%20FB%20Search.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/15.%20FB%20Search.png" alt="FB Search" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-16-price-tracking-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Price Tracking System</h1>
+    <a class="sd-image-link" href="system-design/16.%20Price%20Tracking%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/16.%20Price%20Tracking%20System(R).png" alt="Price Tracking System" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-17-instagram-r" class="sd-item" data-pane="sysdesign">
+    <h1>Instagram</h1>
+    <a class="sd-image-link" href="system-design/17.%20Instagram(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/17.%20Instagram(R).png" alt="Instagram" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-18-top-k-r" class="sd-item" data-pane="sysdesign">
+    <h1>top k</h1>
+    <a class="sd-image-link" href="system-design/18.%20top%20k(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/18.%20top%20k(R).png" alt="top k" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-19-uber-r" class="sd-item" data-pane="sysdesign">
+    <h1>Uber</h1>
+    <a class="sd-image-link" href="system-design/19.%20Uber(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/19.%20Uber(R).png" alt="Uber" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-20-robinhood-r" class="sd-item" data-pane="sysdesign">
+    <h1>RobinHOOD</h1>
+    <a class="sd-image-link" href="system-design/20.%20RobinHOOD(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/20.%20RobinHOOD(R).png" alt="RobinHOOD" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-21-google-doc" class="sd-item" data-pane="sysdesign">
+    <h1>Google Doc</h1>
+    <a class="sd-image-link" href="system-design/21.%20Google%20Doc.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/21.%20Google%20Doc.png" alt="Google Doc" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-22-distributed-cache" class="sd-item" data-pane="sysdesign">
+    <h1>Distributed Cache</h1>
+    <a class="sd-image-link" href="system-design/22.%20Distributed%20Cache.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/22.%20Distributed%20Cache.png" alt="Distributed Cache" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-23-youtube-r" class="sd-item" data-pane="sysdesign">
+    <h1>Youtube</h1>
+    <a class="sd-image-link" href="system-design/23.%20Youtube(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/23.%20Youtube(R).png" alt="Youtube" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-24-task-scheduler-r" class="sd-item" data-pane="sysdesign">
+    <h1>Task Scheduler</h1>
+    <a class="sd-image-link" href="system-design/24.%20Task%20Scheduler(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/24.%20Task%20Scheduler(R).png" alt="Task Scheduler" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-25-web-crawler" class="sd-item" data-pane="sysdesign">
+    <h1>Web Crawler</h1>
+    <a class="sd-image-link" href="system-design/25.%20Web%20Crawler.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/25.%20Web%20Crawler.png" alt="Web Crawler" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-26-ad-click-aggregation-r" class="sd-item" data-pane="sysdesign">
+    <h1>Ad click Aggregation</h1>
+    <a class="sd-image-link" href="system-design/26.%20Ad%20click%20Aggregation(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/26.%20Ad%20click%20Aggregation(R).png" alt="Ad click Aggregation" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-27-payment-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Payment System</h1>
+    <a class="sd-image-link" href="system-design/27.%20Payment%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/27.%20Payment%20System(R).png" alt="Payment System" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-29-chatgpt" class="sd-item" data-pane="sysdesign">
+    <h1>ChatGPT</h1>
+    <a class="sd-image-link" href="system-design/29.%20ChatGPT.png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/29.%20ChatGPT.png" alt="ChatGPT" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-30-flash-sale-r" class="sd-item" data-pane="sysdesign">
+    <h1>Flash Sale</h1>
+    <a class="sd-image-link" href="system-design/30.%20Flash%20Sale(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/30.%20Flash%20Sale(R).png" alt="Flash Sale" loading="lazy">
+    </a>
+  </section>
+  <section id="sd-31-notification-system-r" class="sd-item" data-pane="sysdesign">
+    <h1>Notification System</h1>
+    <a class="sd-image-link" href="system-design/31.%20Notification%20System(R).png" target="_blank" rel="noopener">
+      <img class="sd-image" src="system-design/31.%20Notification%20System(R).png" alt="Notification System" loading="lazy">
+    </a>
+  </section></div>
+  </main>
+</div>
+<div id="tip"><div class="t"></div><div class="b"></div></div>
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const navLists = document.querySelectorAll('.nav-list');
+  const panes = document.querySelectorAll('.pane');
+  const navItems = document.querySelectorAll('.nav-item');
+  const navSubs = document.querySelectorAll('.nav-sub');
+  const navSubItems = document.querySelectorAll('.nav-sub-item');
+
+  function activateTab(name, scrollTop = true) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    navLists.forEach(l => l.classList.toggle('hidden', l.dataset.list !== name));
+    panes.forEach(p => p.classList.toggle('hidden', p.dataset.pane !== name));
+    history.replaceState(null, '', '#tab=' + name);
+    if (scrollTop) window.scrollTo({ top: 0 });
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+  // scrollspy: sections highlight their parent nav-item and expand the sub-nav;
+  // H2s inside a section highlight the matching sub-item.
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target;
+      const id = el.id;
+      if (el.tagName === 'SECTION') {
+        navItems.forEach(n => n.classList.toggle('active', n.dataset.id === id));
+        navSubs.forEach(s => {
+          if (s.classList.contains('always-on')) return;
+          s.classList.toggle('expanded', s.dataset.parent === id);
+        });
+      } else if (el.tagName === 'H2') {
+        navSubItems.forEach(n => n.classList.toggle('active', n.dataset.id === id));
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  document.querySelectorAll('section[id], section h2[id]').forEach(el => observer.observe(el));
+
+  function smoothScrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', '#' + id);
+  }
+
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      smoothScrollTo(item.dataset.id);
+    });
+  });
+
+  navSubItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      smoothScrollTo(item.dataset.id);
+    });
+  });
+
+  // Route to the tab/section named in the hash — on load AND on every hash change,
+  // so in-content links (e.g. a PROJECT question -> a STAR story) switch tabs and scroll.
+  function tabForHash(h) {
+    const m = h.match(/^#tab=(general|stars|sysdesign)$/);
+    if (m) return m[1];
+    if (h.startsWith('#sd-')) return 'sysdesign';
+    if (h.startsWith('#note-')) return 'general';
+    if (h.startsWith('#story-')) return 'stars';
+    return null;
+  }
+  function routeToHash() {
+    const h = location.hash;
+    const tab = tabForHash(h);
+    if (!tab) return;
+    const isAnchor = !/^#tab=/.test(h);
+    activateTab(tab, !isAnchor);
+    if (isAnchor) {
+      const el = document.getElementById(h.slice(1));
+      if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  }
+  routeToHash();
+  window.addEventListener('hashchange', routeToHash);
+
+  // hover-hint popover: hover to peek, click to pin, Esc to dismiss
+  (function(){
+    var tip = document.getElementById('tip');
+    if (!tip) return;
+    var tt = tip.querySelector('.t'), tb = tip.querySelector('.b');
+    var current = null, pinned = false, hideTimer = null;
+    function show(el){
+      if (pinned) return;
+      current = el;
+      tt.textContent = el.dataset.title;
+      tb.innerHTML = el.dataset.tip;
+      tip.style.display = 'block';
+      var r = el.getBoundingClientRect();
+      var top = r.bottom + window.scrollY + 8;
+      var left = Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - tip.offsetWidth - 16);
+      if (top + tip.offsetHeight > window.scrollY + window.innerHeight - 10)
+        top = r.top + window.scrollY - tip.offsetHeight - 8;
+      tip.style.top = top + 'px';
+      tip.style.left = Math.max(left, 8) + 'px';
+    }
+    function scheduleHide(){
+      if (pinned) return;
+      hideTimer = setTimeout(function(){ tip.style.display='none'; current=null; }, 350);
+    }
+    function cancelHide(){ if (hideTimer) { clearTimeout(hideTimer); hideTimer=null; } }
+    document.querySelectorAll('.hint').forEach(function(el){
+      el.addEventListener('mouseenter', function(){ cancelHide(); show(el); });
+      el.addEventListener('mouseleave', scheduleHide);
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        if (pinned && current === el) { unpin(); return; }
+        pinned = false; show(el); pinned = true;
+        tip.classList.add('pinned');
+        document.querySelectorAll('.hint.pinned').forEach(function(h){ h.classList.remove('pinned'); });
+        el.classList.add('pinned');
+      });
+    });
+    tip.addEventListener('mouseenter', cancelHide);
+    tip.addEventListener('mouseleave', scheduleHide);
+    function unpin(){
+      pinned = false; tip.classList.remove('pinned');
+      document.querySelectorAll('.hint.pinned').forEach(function(h){ h.classList.remove('pinned'); });
+      tip.style.display='none'; current=null;
+    }
+    document.addEventListener('click', function(){ if (pinned) unpin(); });
+    document.addEventListener('keydown', function(e){ if (e.key==='Escape') unpin(); });
+  })();
+</script>
+</body>
+</html>
